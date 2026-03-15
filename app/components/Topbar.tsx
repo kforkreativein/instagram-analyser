@@ -1,0 +1,64 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Upload } from "lucide-react";
+
+export default function Topbar() {
+    const pathname = usePathname();
+    const router = useRouter();
+
+    // Format pathname to a readable page name
+    const getPageName = () => {
+        if (!pathname || pathname === "/") return "HOME";
+        const name = pathname.split("/").filter(Boolean)[0];
+        return name ? name.toUpperCase() : "HOME";
+    };
+
+    const isHome = !pathname || pathname === "/" || pathname === "/home";
+
+    const getAccentColorClass = () => {
+        if (!pathname || pathname === "/" || pathname.startsWith("/videos") || pathname.startsWith("/uploads") || pathname.startsWith("/channels")) {
+            return "text-[#FF3B57]";
+        }
+        if (pathname.startsWith("/scripts") || pathname.startsWith("/vault")) {
+            return "text-[#3BFFC8]";
+        }
+        return "text-[#FF3B57]"; // default
+    };
+
+    return (
+        <header className="sticky top-0 bg-[rgba(8,10,15,0.85)] backdrop-blur-[24px] border-b border-[rgba(255,255,255,0.06)] px-4 md:px-6 h-[89px] flex flex-col md:flex-row items-center justify-between gap-4 z-50">
+            {/* Breadcrumb (Left-Aligned) */}
+            <div className="pl-6 flex-1 flex items-center min-w-0 font-['JetBrains_Mono'] text-[10px] text-[#5A6478] tracking-[0.12em] uppercase truncate w-full">
+                OUTLIER.STUDIO / <span className={`ml-[4px] font-[500] truncate ${getAccentColorClass()}`}>{getPageName()}</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 shrink-0 w-full md:w-auto justify-end">
+                {!isHome && (
+                    <>
+                        <Link href="/channels" className="bg-transparent border border-[rgba(255,255,255,0.12)] rounded-[8px] px-[16px] py-[8px] text-[12px] font-['DM_Sans'] font-[500] text-[#8892A4] transition-colors hover:bg-[#111620] hover:text-[#F0F2F7] hover:border-[rgba(255,255,255,0.2)]">
+                            ⬡ Scan Channels
+                        </Link>
+
+                        <Link href="/uploads" className="flex items-center justify-center w-[34px] h-[34px] bg-transparent border border-[rgba(255,255,255,0.1)] rounded-[8px] text-[#8892A4] hover:bg-[#111620] hover:text-[#F0F2F7] transition-colors">
+                            <Upload className="w-[14px] h-[14px]" />
+                        </Link>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                sessionStorage.removeItem("homeState");
+                                router.push("/");
+                            }}
+                            className="bg-[#FF3B57] text-white px-[16px] py-[8px] rounded-[8px] text-[12px] font-['DM_Sans'] font-[600] shadow-[0_0_20px_rgba(255,59,87,0.25)] transition-all hover:bg-[#ff2244] hover:shadow-[0_0_28px_rgba(255,59,87,0.4)] hover:-translate-y-[1px] cursor-pointer border-none"
+                        >
+                            + New Analysis
+                        </button>
+                    </>
+                )}
+            </div>
+        </header>
+    );
+}

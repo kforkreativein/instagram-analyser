@@ -1,0 +1,37 @@
+{
+  "name": "instagram-analyser",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "predev": "node -e \"const fs=require('fs');fs.rmSync('.next',{recursive:true,force:true});fs.rmSync('tsconfig.tsbuildinfo',{force:true});\"",
+    "dev": "next dev -p 2000",
+    "build": "next build",
+    "start": "next start -p 2000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"const fs=require('fs');fs.rmSync('.next',{recursive:true,force:true});fs.rmSync('tsconfig.tsbuildinfo',{force:true});\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@google/generative-ai": "^0.24.1",
+    "ffmpeg-static": "^5.3.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "lucide-react": "^0.542.0",
+    "next": "^14.2.0",
+    "openai": "^5.23.2",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "^3.1.2"
+  },
+  "devDependencies": {
+    "@types/fluent-ffmpeg": "^2.1.28",
+    "@types/node": "^20.17.57",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.2"
+  }
+}

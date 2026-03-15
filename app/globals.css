@@ -1,0 +1,208 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #080A0F;
+  --surface: #0D1017;
+  --surface2: #111620;
+  --surface3: #161C2A;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-bright: rgba(255, 255, 255, 0.12);
+  --accent: #FF3B57;
+  --accent2: #FF8C42;
+  --accent3: #3BFFC8;
+  --text: #F0F2F7;
+  --text-muted: #5A6478;
+  --text-dim: #8892A4;
+  --sidebar-w: 220px;
+  color-scheme: dark;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background-color: var(--bg);
+  background:
+    radial-gradient(ellipse 60% 40% at 15% 5%,  rgba(236, 72, 153, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 45% 30% at 85% 15%, rgba(59, 255, 200, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 40% at 65% 85%, rgba(99, 102, 241, 0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 35% 25% at 35% 60%, rgba(234, 179, 8, 0.03)  0%, transparent 55%),
+    var(--bg);
+  /* Keep gradient positions relative to the viewport, not the document height */
+  background-attachment: fixed;
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease forwards;
+}
+
+.page-enter {
+  animation: fadeInUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* --- SCROLLBARS --- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  transition: all 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* --- ANALYZE SECTION INPUTS --- */
+.analyze-input {
+  @apply bg-[#111] border border-white/10 rounded-lg h-11 px-4 !pl-[42px] text-sm text-white placeholder-gray-500 transition-all focus:outline-none focus:ring-1 focus:ring-red-500/50 focus:border-red-500;
+}
+
+/* --- FOCUS STATES --- */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255, 59, 87, 0.35);
+}
+
+.focus-teal:focus-visible {
+  box-shadow: 0 0 0 2px rgba(59, 255, 200, 0.3);
+}
+
+/* --- RESPONSIVENESS --- */
+@media (max-width: 1100px) {
+  :root {
+    --sidebar-w: 200px;
+  }
+}
+
+@media (max-width: 800px) {
+  :root {
+    --sidebar-w: 70px;
+  }
+
+  .sidebar-text {
+    display: none;
+  }
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* --- GLASSMORPHISM UTILITIES --- */
+@layer components {
+  .glass-surface {
+    @apply bg-white/[0.04] backdrop-blur-3xl;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .glow-magenta {
+    border-color: rgba(236, 72, 153, 0.35);
+    box-shadow: 0 0 15px rgba(236, 72, 153, 0.2), 0 0 40px rgba(236, 72, 153, 0.05);
+  }
+
+  .glow-cyan {
+    border-color: rgba(59, 255, 200, 0.35);
+    box-shadow: 0 0 15px rgba(59, 255, 200, 0.2), 0 0 40px rgba(59, 255, 200, 0.05);
+  }
+
+  .glow-cyan-sm {
+    border-color: rgba(59, 255, 200, 0.2);
+    box-shadow: 0 0 8px rgba(59, 255, 200, 0.15);
+  }
+
+  .glow-yellow {
+    border-color: rgba(234, 179, 8, 0.35);
+    box-shadow: 0 0 15px rgba(234, 179, 8, 0.2), 0 0 40px rgba(234, 179, 8, 0.05);
+  }
+
+  .glow-green {
+    border-color: rgba(16, 185, 129, 0.35);
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2), 0 0 40px rgba(16, 185, 129, 0.05);
+  }
+
+  .glow-blue {
+    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 0 15px rgba(99, 102, 241, 0.2), 0 0 40px rgba(99, 102, 241, 0.05);
+  }
+}
