@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
+import { getSettings } from "../../../lib/db";
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -62,7 +63,11 @@ export async function POST(request: NextRequest) {
     }
 
     const base64String = Buffer.from(videoBuffer).toString("base64");
-    const genAI = new GoogleGenerativeAI("AIzaSyCKvEm49jfoK-kzZDeT7w9FSA4pSLuIedk");
+    const resolvedKey = body.geminiApiKey?.trim() || process.env.GEMINI_API_KEY || getSettings().geminiApiKey;
+    if (!resolvedKey) {
+      return NextResponse.json({ error: "Gemini API key missing" }, { status: 401 });
+    }
+    const genAI = new GoogleGenerativeAI(resolvedKey);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const result = await model.generateContent([
