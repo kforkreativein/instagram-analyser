@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     const base64String = Buffer.from(videoBuffer).toString("base64");
-    const genAI = new GoogleGenerativeAI("AIzaSyCKvEm49jfoK-kzZDeT7w9FSA4pSLuIedk");
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const result = await model.generateContent([
