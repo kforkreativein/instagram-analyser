@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -91,6 +92,14 @@ function formatFollowers(followers: WatchlistChannel["followers"]): string {
 }
 
 export default function ChannelsBuilderPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen text-white/40 text-sm">Loading...</div>}>
+      <ChannelsBuilderContent />
+    </Suspense>
+  );
+}
+
+function ChannelsBuilderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editId = searchParams.get("id");
