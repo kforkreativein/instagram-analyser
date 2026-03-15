@@ -28,3 +28,5 @@ yarn-error.log*
 
 # TypeScript build info
 tsconfig.tsbuildinfo
+
+/lib/generated/prisma
