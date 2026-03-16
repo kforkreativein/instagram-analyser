@@ -117,10 +117,10 @@ function ChannelsBuilderContent() {
     setIsHydratingWatchlist(true);
     fetch(`/api/watchlists?id=${editId}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((data: { watchlist?: { name: string; profiles: WatchlistChannel[] } }) => {
+      .then((data: { watchlist?: { name: string; channels?: WatchlistChannel[]; profiles?: WatchlistChannel[] } }) => {
         if (data.watchlist) {
           setWatchlistName(data.watchlist.name);
-          setWatchlist(data.watchlist.profiles);
+          setWatchlist(data.watchlist.channels || (data.watchlist as any).profiles || []);
         }
       })
       .catch(() => { /* ignore — fallback to empty */ })

@@ -30,3 +30,5 @@ yarn-error.log*
 tsconfig.tsbuildinfo
 
 /lib/generated/prisma
+.vercel
+.env*.local

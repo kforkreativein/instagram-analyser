@@ -80,7 +80,8 @@ function buildPrompt(body: GenerateScriptBody): string {
       ? `- FEW-SHOT WINNING EXAMPLES (mirror these rhythms exactly):\n${(client.examples || client.winningScripts).filter((s:any) => s.useAsReference).map((s:any) => `  [${s.signal}] ${s.title}:\n  "${s.content}"`).join("\n")}`
       : "",
     `STRICT STYLE INSTRUCTION: You MUST mirror the tone, vocabulary level, and structural patterns identified in the Style DNA and Winning Examples above.`,
-    ""
+    "",
+    `CRITICAL LENGTH CONSTRAINT: This script is for a ${videoLength}-second short-form video. Therefore, the ENTIRE script (excluding bracketed tags) MUST be approximately ${targetWords} words long. You will be penalized if the script is too long. Keep sentences punchy and fast-paced.`
   ].filter(Boolean).join("\n") : "";
 
   return [

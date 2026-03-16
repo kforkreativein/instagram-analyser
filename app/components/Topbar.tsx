@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Upload } from "lucide-react";
+import { Upload, ChevronRight } from "lucide-react";
 import { useSession } from "next-auth/react";
 
 export default function Topbar() {
@@ -57,8 +57,20 @@ export default function Topbar() {
     return (
         <header className="sticky top-0 bg-[rgba(8,10,15,0.85)] backdrop-blur-[24px] border-b border-[rgba(255,255,255,0.06)] px-4 md:px-6 h-[89px] flex flex-col md:flex-row items-center justify-between gap-4 z-50">
             {/* Breadcrumb (Left-Aligned) */}
-            <div className="pl-6 flex-1 flex items-center min-w-0 font-['JetBrains_Mono'] text-[10px] text-[#5A6478] tracking-[0.12em] uppercase truncate w-full">
-                {(agencyName || session?.user?.email || "OUTLIER STUDIO").toUpperCase()} / <span className={`ml-[4px] font-[500] truncate ${getAccentColorClass()}`}>{getPageName()}</span>
+            <div className="flex items-center gap-4">
+                <img
+                    src="/branding/full-logo.png"
+                    alt="Outlier Studio"
+                    className="object-contain w-32 h-auto"
+                />
+                <div className="h-6 w-px bg-white/10" />
+                <nav className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-500 font-bold tracking-tight">OUTLIER STUDIO</span>
+                    <ChevronRight className="h-4 w-4 text-gray-600" />
+                    <span className="text-white font-medium capitalize prose-none">
+                        {getPageName().replace(/-/g, " ")}
+                    </span>
+                </nav>
             </div>
 
             {/* Action Buttons */}

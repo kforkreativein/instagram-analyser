@@ -496,10 +496,32 @@ async function generateWithProvider(
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    const contentType = req.headers.get("content-type") || "";
+    let buffer: Buffer;
+    let mimeType: string;
+    let fileName: string;
+
+    if (contentType.includes("application/json")) {
+      const body = await req.json();
+      const videoUrl = body.videoUrl;
+      if (!videoUrl) return NextResponse.json({ error: "No videoUrl provided" }, { status: 400 });
+
+      const resp = await fetch(videoUrl);
+      if (!resp.ok) throw new Error("Failed to fetch video from storage.");
+      const arrayBuffer = await resp.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      mimeType = resp.headers.get("content-type") || "video/mp4";
+      fileName = videoUrl.split("/").pop() || "uploaded_video.mp4";
+    } else {
+      const formData = await req.formData();
+      const file = formData.get("file") as File;
+      if (!file) {
+        return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      mimeType = file.type;
+      fileName = file.name;
     }
 
     // Fetch user's API keys from database
@@ -536,10 +558,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Gemini API key is required for transcription. Please add it in your Settings." }, { status: 400 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
     const base64Video = buffer.toString("base64");
-    const mimeType = file.type;
 
     const generatedTranscriptString = await transcribeWithGemini(transcriptionApiKey, base64Video, mimeType);
     if (!generatedTranscriptString) {
@@ -585,7 +604,7 @@ export async function POST(req: NextRequest) {
       const prismaRecord = await prisma.upload.create({
         data: {
           userId: dbUser.id,
-          fileName: file.name,
+          fileName: fileName,
           analysis: analysis as any,
           transcript: transcriptForModel,
           ...(thumbnail ? { thumbnail } : {}),

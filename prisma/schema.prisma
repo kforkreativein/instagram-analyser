@@ -17,7 +17,7 @@ model User {
   clients   Client[]
   scripts   Script[]
   uploads   Upload[]
-  watchlist Watchlist[]
+  watchlistGroups WatchlistGroup[]
   history   History[]
   
   createdAt DateTime @default(now())
@@ -117,10 +117,24 @@ model Upload {
   @@index([userId])
 }
 
-model Watchlist {
+model WatchlistGroup {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name      String
+  channels  WatchlistChannel[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model WatchlistChannel {
   id            String   @id @default(cuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId       String
+  group         WatchlistGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   
   username      String
   platform      String?  @default("Instagram")
@@ -132,9 +146,9 @@ model Watchlist {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  
-  @@index([userId])
-  @@unique([userId, username])
+
+  @@index([groupId])
+  @@unique([groupId, username])
 }
 
 model History {

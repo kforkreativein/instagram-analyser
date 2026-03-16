@@ -9,6 +9,7 @@ import { Sparkles } from "lucide-react";
 import { useToast } from "@/app/components/UI/Toast";
 import type { ScanProfileResponse } from "@/app/api/scan-profile/route";
 import type { NamedWatchlist, WatchlistChannel } from "@/lib/types";
+import { formatNumber, formatRelativeTime } from "@/lib/utils";
 
 // ── types ───────────────────────────────────────────────
 type Watchlist = { name: string; count: number; avatars: string[] };
@@ -244,7 +245,10 @@ export default function ChannelsDashboardPage() {
   async function handleScanTracked() {
     // Collect all unique usernames from all named watchlists
     const allUsernames = Array.from(
-      new Set((Array.isArray(namedWatchlists) ? namedWatchlists : []).flatMap((wl) => (Array.isArray(wl.profiles) ? wl.profiles : []).map((p) => p.username)))
+      new Set((Array.isArray(namedWatchlists) ? namedWatchlists : []).flatMap((wl) => {
+        const channels = wl.channels || (wl as any).profiles || [];
+        return Array.isArray(channels) ? channels.map((p: any) => p.username) : [];
+      }))
     );
     if (allUsernames.length === 0) {
       setScanError("No profiles tracked. Build a watchlist first.");
@@ -497,6 +501,7 @@ export default function ChannelsDashboardPage() {
                           <img
                             src={outlier.thumbnailUrl || outlier.displayUrl || outlier.coverUrl}
                             alt="Thumbnail"
+                            referrerPolicy="no-referrer"
                             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                             onError={(e) => {
                               e.currentTarget.style.display = "none";
@@ -514,6 +519,7 @@ export default function ChannelsDashboardPage() {
                               preload="metadata"
                               playsInline
                               muted
+                              referrerPolicy="no-referrer"
                               data-thumbnail-fallback="true"
                               className="hidden absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 bg-[#0a0a0a]"
                             />
@@ -529,6 +535,7 @@ export default function ChannelsDashboardPage() {
                           preload="metadata"
                           playsInline
                           muted
+                          referrerPolicy="no-referrer"
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 bg-[#0a0a0a]"
                         />
                       ) : (
@@ -654,37 +661,47 @@ export default function ChannelsDashboardPage() {
                     {/* Avatar Stack */}
                     <div className="mt-4 mb-2">
                       <div className="flex items-center">
-                        {(Array.isArray(wl.profiles) ? wl.profiles : []).slice(0, 4).map((profile, idx) => (
-                          <div
-                            key={profile.username}
-                            className={`w-10 h-10 rounded-full border-2 border-[#0A0A0A] flex-shrink-0 overflow-hidden bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white${idx > 0 ? " -ml-3" : ""}`}
-                            title={`@${profile.username}`}
-                          >
-                            {profile.profilePicUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={profile.profilePicUrl}
-                                alt={profile.username}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                  (e.currentTarget.nextElementSibling as HTMLElement | null)?.classList.remove("hidden");
-                                }}
-                              />
-                            ) : null}
-                            <span className={profile.profilePicUrl ? "hidden" : ""}>
-                              {profile.username.slice(0, 2).toUpperCase()}
-                            </span>
-                          </div>
-                        ))}
-                        {wl.profiles.length > 4 && (
-                          <div className="w-10 h-10 rounded-full border-2 border-[#0A0A0A] -ml-3 bg-white/10 flex items-center justify-center text-xs font-bold text-white/60 flex-shrink-0">
-                            +{wl.profiles.length - 4}
-                          </div>
-                        )}
+                        {(() => {
+                          const channels = wl.channels || (wl as any).profiles || [];
+                          return (Array.isArray(channels) ? channels : []).slice(0, 4).map((profile: any, idx: number) => (
+                            <div
+                              key={profile.username}
+                              className={`w-10 h-10 rounded-full border-2 border-[#0A0A0A] flex-shrink-0 overflow-hidden bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white${idx > 0 ? " -ml-3" : ""}`}
+                              title={`@${profile.username}`}
+                            >
+                              {profile.profilePicUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={profile.profilePicUrl}
+                                  alt={profile.username}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                    (e.currentTarget.nextElementSibling as HTMLElement | null)?.classList.remove("hidden");
+                                  }}
+                                />
+                              ) : null}
+                              <span className={profile.profilePicUrl ? "hidden" : ""}>
+                                {profile.username.slice(0, 2).toUpperCase()}
+                              </span>
+                            </div>
+                          ));
+                        })()}
+                        {(() => {
+                          const channels = wl.channels || (wl as any).profiles || [];
+                          return channels.length > 4 && (
+                            <div className="w-10 h-10 rounded-full border-2 border-[#0A0A0A] -ml-3 bg-white/10 flex items-center justify-center text-xs font-bold text-white/60 flex-shrink-0">
+                              +{channels.length - 4}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <p className="text-xs text-white/40 mt-2">
-                        {wl.profiles.length} creator{wl.profiles.length !== 1 ? "s" : ""} tracked
+                        {(() => {
+                          const channels = wl.channels || (wl as any).profiles || [];
+                          return `${channels.length} creator${channels.length !== 1 ? "s" : ""} tracked`;
+                        })()}
                       </p>
                     </div>
 
@@ -692,8 +709,13 @@ export default function ChannelsDashboardPage() {
                     <div className="mt-auto pt-3">
                       <button
                         type="button"
-                        disabled={isScanning || wl.profiles.length === 0}
-                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleScanProfiles((Array.isArray(wl.profiles) ? wl.profiles : []).map((p) => p.username)); }}
+                        disabled={isScanning || (wl.channels || (wl as any).profiles || []).length === 0}
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          e.preventDefault(); 
+                          const channels = wl.channels || (wl as any).profiles || [];
+                          void handleScanProfiles((Array.isArray(channels) ? channels : []).map((p: any) => p.username)); 
+                        }}
                         className="w-full py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 font-semibold flex items-center justify-center gap-2 hover:bg-cyan-500/10 hover:border-cyan-500 hover:text-cyan-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         ⚡️ Scan Watchlist
@@ -742,6 +764,7 @@ export default function ChannelsDashboardPage() {
                       src={post.thumbnailUrl || post.displayUrl || post.coverUrl} 
                       className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
                       alt={post.fromUsername}
+                      referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity"></div>
                     
@@ -755,13 +778,24 @@ export default function ChannelsDashboardPage() {
                       </span>
                     </div>
 
-                    <div className="absolute bottom-3 left-3 right-3">
-                      <p className="font-['JetBrains_Mono'] text-[10px] text-cyan-400 mb-1 truncate">@{post.fromUsername}</p>
-                      <p className="font-['DM_Sans'] text-[11px] font-bold text-white line-clamp-2 leading-tight group-hover:text-cyan-100 transition-colors">
-                        {post.caption?.slice(0, 60) || "No caption"}...
-                      </p>
-                      <div className="mt-2 flex items-center gap-2 text-[10px] text-gray-400 font-medium">
-                        <span>👁️ {formatViews(post.views)}</span>
+                    {/* Hover Overlay Content */}
+                    <div className="absolute inset-0 z-20 flex flex-col justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                      <div className="space-y-1.5">
+                        <p className="text-white text-[10px] font-medium line-clamp-2 leading-tight">
+                          {post.caption || "No caption"}
+                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-black/60 backdrop-blur-md border border-white/10 rounded text-[9px] font-bold text-white">
+                            👁️ {formatNumber(post.views)}
+                          </div>
+                          <div className={`px-1.5 py-0.5 rounded text-[9px] font-black backdrop-blur-md border ${
+                            (post.multiplier || post.outlierScore) >= 2.0 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50' :
+                            (post.multiplier || post.outlierScore) >= 1.0 ? 'bg-white/10 text-white border-white/20' : 
+                            'bg-red-500/10 text-red-400 border-red-500/30'
+                          }`}>
+                            {(post.multiplier?.toFixed(1) || post.outlierScore?.toFixed(1))}x
+                          </div>
+                        </div>
                       </div>
                     </div>
                     

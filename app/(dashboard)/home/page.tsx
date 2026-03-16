@@ -14,7 +14,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { AIAnalysis, AnalyzeResponse, DateRangeOption, InstagramOutlierResponse, InstagramPost } from "@/lib/types";
-import { formatNumber, formatRelativeTime } from "@/lib/utils";
+import { formatViews, formatNumber, formatRelativeTime } from "@/lib/utils";
 import {
   ANALYSIS_CACHE_KEY,
   POSTS_CACHE_KEY,
@@ -1358,16 +1358,17 @@ function HomePageContent() {
                             }}
                             className="relative aspect-[9/14] overflow-hidden bg-[#111620]"
                           >
-                            <video
-                              ref={(node) => {
-                                videoRefs.current[post.id] = node;
-                              }}
-                              src={post.videoUrl ? `${post.videoUrl}#t=0.001` : ""}
-                              poster={post.thumbnailUrl || post.displayUrl || post.coverUrl || post.videoUrl}
-                              controls={false}
-                              preload="metadata"
-                              playsInline
-                              className="w-full h-full object-cover opacity-80 transition-opacity duration-200 group-hover:opacity-100"
+                              <video
+                                ref={(node) => {
+                                  videoRefs.current[post.id] = node;
+                                }}
+                                src={post.videoUrl ? `${post.videoUrl}#t=0.001` : ""}
+                                poster={post.thumbnailUrl || post.displayUrl || post.coverUrl || post.videoUrl}
+                                controls={false}
+                                preload="metadata"
+                                playsInline
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover opacity-80 transition-opacity duration-200 group-hover:opacity-100"
                               onLoadedMetadata={(event) => {
                                 const video = event.currentTarget;
                                 video.pause();
@@ -1377,37 +1378,31 @@ function HomePageContent() {
                               }}
                             />
 
-                            {/* Gradient Overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-[rgba(0,0,0,0.85)] via-[rgba(0,0,0,0.2)] to-transparent opacity-100 pointer-events-none"></div>
-
-                            {/* Badges */}
-                            <div className="absolute top-[10px] left-[10px] bg-[rgba(0,0,0,0.65)] backdrop-blur-[12px] border border-[rgba(255,255,255,0.1)] rounded-[5px] px-[7px] py-[3px] font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.1em] text-[#3BFFC8] pointer-events-none">
-                              {post.mediaType === "REEL" ? "REEL" : post.mediaType === "CAROUSEL" ? "CAROUSEL" : post.mediaType.toUpperCase()}
-                            </div>
-
-                            {(() => {
-                              const outlierScoreValue = post.outlierScore !== undefined && post.outlierScore !== null
-                                ? Number(post.outlierScore).toFixed(1)
-                                : "—";
-                              
-                              return (
-                                <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center z-20">
-                                  {/* Views Badge (Left) */}
-                                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-md border border-white/10 text-xs font-medium text-white/90">
+                            {/* Hover Overlay Content */}
+                            <div className="absolute inset-0 z-20 flex flex-col justify-end p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
+                              <div className="space-y-2">
+                                <p className="text-white text-xs font-medium line-clamp-3 leading-relaxed">
+                                  {post.caption || "No caption"}
+                                </p>
+                                <div className="flex items-center justify-between gap-4">
+                                  <div className="flex items-center gap-1.5 px-2 py-1 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[10px] font-bold text-white">
                                     👁 {formatNumber(post.metrics.views)}
                                   </div>
-
-                                  {/* Outlier Score Badge (Right) */}
-                                  <div className={`px-2.5 py-1 rounded-md text-xs font-black backdrop-blur-md border ${
-                                    Number(outlierScoreValue) >= 2.0 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' :
-                                    Number(outlierScoreValue) >= 1.0 ? 'bg-white/10 text-white/90 border-white/20' : 
+                                  <div className={`px-2 py-1 rounded-md text-[10px] font-black backdrop-blur-md border ${
+                                    Number(post.outlierScore) >= 2.0 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' :
+                                    Number(post.outlierScore) >= 1.0 ? 'bg-white/10 text-white border-white/20' : 
                                     'bg-red-500/10 text-red-400 border-red-500/30'
                                   }`}>
-                                    {outlierScoreValue}x
+                                    {Number(post.outlierScore).toFixed(1)}x
                                   </div>
                                 </div>
-                              );
-                            })()}
+                              </div>
+                            </div>
+
+                            {/* Default Badges (Hidden on group-hover if redundant, but keep for now) */}
+                            <div className="absolute top-[10px] left-[10px] z-30 bg-[rgba(0,0,0,0.65)] backdrop-blur-[12px] border border-[rgba(255,255,255,0.1)] rounded-[5px] px-[7px] py-[3px] font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.1em] text-[#3BFFC8] pointer-events-none">
+                              {post.mediaType === "REEL" ? "REEL" : post.mediaType === "CAROUSEL" ? "CAROUSEL" : post.mediaType.toUpperCase()}
+                            </div>
                           </div>
 
                           {/* VIDEO INFO */}

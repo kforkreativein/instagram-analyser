@@ -1641,6 +1641,7 @@ function ScriptsPageContent() {
         id: (remixData as any)?.post?.id || `scr-${Date.now()}`,
         title: finalTitle,
         topic: topic,
+        type: creationMode === "remix" ? "Remix" : "Original",
         content: generatedText,
         caption: generatedCaption || null,
         repurposed: repurposedText || null,
@@ -1791,7 +1792,7 @@ function ScriptsPageContent() {
         setGeneratedCaption(data.result);
         toast("success", "Caption Generated", "Viral caption ready.");
       } else if (action === 'brainstorm') {
-        setBrainstormSuggestions(data.result);
+        setBrainstormSuggestions(data.suggestions);
         toast("success", "Brainstorm Ready", "3 tactical suggestions generated.");
       } else if (action === 'visuals') {
         setVisualCues(data.result);
@@ -2616,8 +2617,8 @@ LANGUAGE: ${activeLanguage}`;
         throw new Error(payload.message || (typeof payload.error === 'string' ? payload.error : null) || "Repurposing failed");
       }
 
-      const payload = (await response.json()) as { result?: string };
-      setRepurposedText((payload.result || "").trim());
+      const payload = (await response.json()) as { repurposedContent?: string };
+      setRepurposedText((payload.repurposedContent || "").trim());
       toast("success", "Content Repurposed", `Script repurposed for ${platform}.`);
     } catch (err) {
       setRepurposeError(err instanceof Error ? err.message : "Repurposing failed");
@@ -3278,7 +3279,7 @@ LANGUAGE: ${activeLanguage}`;
             </div>
           )}
 
-          <div className="p-[18px_20px] pb-0">
+          <div className="p-[18px_20px] relative">
             <div className="flex justify-between items-center mb-[12px]">
               <span className="font-['Syne'] font-[700] text-[10px] text-[#5A6478] uppercase tracking-[0.1em]">Script Output</span>
               {script.trim() && (
@@ -3287,107 +3288,102 @@ LANGUAGE: ${activeLanguage}`;
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="p-[18px_20px] relative">
-            <textarea
-              value={script}
-              onChange={(e) => setScript(e.target.value)}
-              onMouseUp={(e) => {
-                const target = e.currentTarget;
-                const start = target.selectionStart;
-                const end = target.selectionEnd;
-                if (start !== end) {
-                  const text = script.substring(start, end);
-                  setSelection({
-                    start,
-                    end,
-                    text,
-                    x: e.clientX,
-                    y: e.clientY - 40,
-                    rect: target.getBoundingClientRect()
-                  });
-                  setShowAskInput(false);
-                } else {
-                  setSelection(null);
-                }
-              }}
-              placeholder="Your viral script will appear here..."
-              className="min-h-[350px] w-full rounded-xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-inner p-[20px] font-['JetBrains_Mono'] text-[13px] leading-[1.8] text-[#3BFFC8] outline-none focus:border-[#3BFFC8]/30 transition-all resize-none overflow-y-auto"
-              style={{ 
-                textShadow: '0 0 8px rgba(59,255,200,0.1)'
-              }}
-            />
-
-            {selection && !showAskInput && (
-              <div
-                className="fixed bg-[#0D1017] border border-[rgba(255,255,255,0.15)] rounded-[10px] p-[6px] shadow-2xl z-50 animate-in fade-in zoom-in duration-200"
-                style={{
-                  top: selection.y - 10,
-                  left: selection.x - 40,
-                }}
-              >
-                <div className="flex items-center gap-[6px]">
-                  <button
-                    onClick={() => setShowAskInput(true)}
-                    className="flex items-center gap-[6px] bg-[#3BFFC8] text-[#080A0F] px-[12px] py-[6px] rounded-[6px] font-['DM_Sans'] text-[11.5px] font-[700] hover:bg-[#2fe6b4] transition-colors cursor-pointer"
-                  >
-                    ✨ Ask AI
-                  </button>
-                  <button
-                    onClick={() => {
-                      void navigator.clipboard.writeText(selection.text);
-                      setSelection(null);
-                      toast("success", "Copied", "Text copied to clipboard");
-                    }}
-                    className="p-[6px] text-[#8892A4] hover:text-[#F0F2F7] transition-colors cursor-pointer"
-                  >
-                    ⧉
-                  </button>
+            {/* SCRIPT EDITOR CONTAINER */}
+            <div className="relative group bg-[#13131A] border border-white/5 rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 hover:border-white/10">
+              {/* Selection Toolbar (Inline Ask AI) */}
+              {selection && (
+                <div
+                  style={{
+                    position: "fixed",
+                    left: `${selection.x}px`,
+                    top: `${selection.y}px`,
+                    transform: "translate(-50%, -100%) translateY(-12px)",
+                  }}
+                  className={`z-[100] flex items-center bg-[#1C1C26] border border-white/10 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] p-1 animate-in fade-in zoom-in duration-200 pointer-events-auto ${showAskInput ? 'w-[320px] flex-col p-3' : ''}`}
+                >
+                  {!showAskInput ? (
+                    <>
+                      <button
+                        onClick={() => setShowAskInput(true)}
+                        className="flex items-center gap-[6px] bg-[#3BFFC8] text-[#080A0F] px-[12px] py-[6px] rounded-[6px] font-['DM_Sans'] text-[11.5px] font-[700] hover:bg-[#2fe6b4] transition-colors cursor-pointer"
+                      >
+                        ✨ Ask AI
+                      </button>
+                      <button
+                        onClick={() => {
+                          void navigator.clipboard.writeText(selection.text);
+                          setSelection(null);
+                          toast("success", "Copied", "Text copied to clipboard");
+                        }}
+                        className="p-[6px] text-[#8892A4] hover:text-[#F0F2F7] transition-colors cursor-pointer ml-1"
+                      >
+                        ⧉
+                      </button>
+                    </>
+                  ) : (
+                    <div className="w-full flex flex-col gap-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] text-[#3BFFC8] font-mono bg-[#3BFFC8]/10 px-1.5 py-0.5 rounded">Selected: "{selection.text.substring(0, 20)}{selection.text.length > 20 ? '...' : ''}"</span>
+                      </div>
+                      <textarea
+                        autoFocus
+                        value={aiCommand}
+                        onChange={(e) => setAiCommand(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            void applyInlineEdit();
+                          }
+                          if (e.key === "Escape") {
+                            setShowAskInput(false);
+                            setSelection(null);
+                          }
+                        }}
+                        placeholder="E.g., 'Make it punchier'..."
+                        className="w-full bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded-[8px] p-[10px] font-['DM_Sans'] text-[12.5px] text-[#F0F2F7] outline-none min-h-[70px] focus:border-[#3BFFC8]/40 resize-none"
+                      />
+                      {aiEditError && <p className="text-[#FF3B57] text-[10px] font-['DM_Sans']">{aiEditError}</p>}
+                      <div className="flex justify-between items-center mt-1">
+                        <button onClick={() => { setShowAskInput(false); setSelection(null); }} className="text-[#5A6478] text-[11px] hover:text-[#F0F2F7]">Cancel</button>
+                        <button
+                          onClick={() => void applyInlineEdit()}
+                          disabled={isApplyingAiEdit}
+                          className="bg-[#3BFFC8] text-[#080A0F] px-[14px] py-[6px] rounded-[6px] font-['DM_Sans'] text-[11.5px] font-[700] flex items-center gap-1 hover:shadow-[0_0_12px_rgba(59,255,200,0.3)] disabled:opacity-50"
+                        >
+                          {isApplyingAiEdit ? "Editing..." : "✨ Rewrite"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {selection && showAskInput && (
-              <div
-                className="fixed bg-[#0D1017] border border-[rgba(59,255,200,0.2)] rounded-[12px] p-[10px] shadow-2xl z-50 w-[320px] animate-in slide-in-from-top-2 duration-200"
-                style={{
-                  top: selection.y - 10,
-                  left: selection.x - 160,
+              <textarea
+                value={script}
+                onChange={(e) => setScript(e.target.value)}
+                onMouseUp={(e) => {
+                  const target = e.currentTarget;
+                  const start = target.selectionStart;
+                  const end = target.selectionEnd;
+                  if (start !== end) {
+                    const text = script.substring(start, end);
+                    setSelection({
+                      start,
+                      end,
+                      text,
+                      x: e.clientX,
+                      y: e.clientY,
+                      rect: target.getBoundingClientRect()
+                    });
+                  } else if (!showAskInput) {
+                    setSelection(null);
+                  }
                 }}
-              >
-                <div className="flex flex-col gap-[8px]">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] text-[#3BFFC8] font-mono bg-[#3BFFC8]/10 px-1.5 py-0.5 rounded">Selected: "{selection.text.substring(0, 20)}{selection.text.length > 20 ? '...' : ''}"</span>
-                  </div>
-                  <textarea
-                    autoFocus
-                    value={aiCommand}
-                    onChange={(e) => setAiCommand(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void applyInlineEdit();
-                      }
-                    }}
-                    placeholder="E.g., 'Make it punchier' or 'Add more emotion'..."
-                    className="w-full bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded-[8px] p-[10px] font-['DM_Sans'] text-[12.5px] text-[#F0F2F7] outline-none min-h-[70px] focus:border-[#3BFFC8]/40"
-                  />
-                  {aiEditError && <p className="text-[#FF3B57] text-[10px] font-['DM_Sans']">{aiEditError}</p>}
-                  <div className="flex justify-between items-center mt-1">
-                    <button onClick={() => { setShowAskInput(false); setSelection(null); }} className="text-[#5A6478] text-[11px] hover:text-[#F0F2F7]">Cancel</button>
-                    <button
-                      onClick={() => void applyInlineEdit()}
-                      disabled={isApplyingAiEdit}
-                      className="bg-[#3BFFC8] text-[#080A0F] px-[14px] py-[6px] rounded-[6px] font-['DM_Sans'] text-[11.5px] font-[700] flex items-center gap-1 hover:shadow-[0_0_12px_rgba(59,255,200,0.3)] disabled:opacity-50"
-                    >
-                      {isApplyingAiEdit ? "Editing..." : "✨ Rewrite"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+                placeholder="Your viral script will appear here..."
+                className="min-h-[500px] w-full bg-transparent p-8 font-['DM_Sans'] text-[15px] leading-[1.7] text-gray-200 outline-none focus:outline-none whitespace-pre-wrap resize-none scrollbar-hide"
+                spellCheck={false}
+              />
+            </div>
 
 
           <div className="flex gap-[8px] mt-[10px] flex-wrap items-center">
@@ -3551,6 +3547,8 @@ LANGUAGE: ${activeLanguage}`;
               )}
             </div>
           )}
+        </div>
+      </section>
 
 
           {audioPlaylist.length > 0 ? (
@@ -3614,8 +3612,7 @@ LANGUAGE: ${activeLanguage}`;
               🔊 {isPlayingTTS ? "Generating Audio..." : "Listen to Script"}
             </button>
           )}
-        </section>
-
+        
         {/* Caption Output */}
         {generatedCaption && (
           <div className="mt-4 bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6 relative">
@@ -3972,7 +3969,6 @@ LANGUAGE: ${activeLanguage}`;
                 )}
               </div>
             </div>
-          </div>
 
           {/* REPURPOSE CONTENT */}
           <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[500px]">

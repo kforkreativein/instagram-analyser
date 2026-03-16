@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { type ChangeEvent, useState, useEffect } from "react";
+import { upload } from '@vercel/blob/client';
 import type { AnalyzeResponse, InstagramPost } from "@/lib/types";
 import { Upload, X, FileVideo, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
 import { useToast } from "@/app/components/UI/Toast";
@@ -108,13 +109,18 @@ export default function UploadsPage() {
       return val && val !== "undefined" && val !== "null" ? val.trim() : "";
     };
 
-    const formData = new FormData();
-    formData.append("file", file);
-
     try {
+      // 1. Upload directly to Vercel Blob to bypass 413 Payload Error
+      const newBlob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+      });
+
+      // 2. Send the blob URL for analysis
       const response = await fetch("/api/analyze-manual", {
         method: "POST",
-        body: formData, // No Content-Type header
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl: newBlob.url }),
       });
 
       if (!response.ok) {

@@ -150,6 +150,8 @@ export interface InstagramOutlierResponse {
 }
 
 export interface WatchlistChannel {
+  id?: string;
+  groupId?: string;
   username: string;
   platform: string;
   url?: string;
@@ -162,9 +164,11 @@ export interface WatchlistChannel {
 
 export interface NamedWatchlist {
   id: string;
+  userId: string;
   name: string;
-  profiles: WatchlistChannel[];
+  channels: WatchlistChannel[];
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface HookAnalysis {

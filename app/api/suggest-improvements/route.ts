@@ -1,53 +1,63 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { NextRequest, NextResponse } from "next/server";
-import { getSettings } from "../../../lib/db";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export const runtime = "nodejs";
 export const maxDuration = 60;
 
-export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    const { script } = body;
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const dbSettings = await getSettings(session.user.id);
-    const apiKey = dbSettings.geminiApiKey;
+    const body = await req.json();
+    const scriptText = body.scriptContent || body.script || body.text;
 
-    if (!apiKey) {
-      return NextResponse.json({ error: "API Key not found in Settings." }, { status: 401 });
-    }
+    if (!scriptText) return NextResponse.json({ error: "Missing script" }, { status: 400 });
+
+    const user = await prisma.user.findUnique({ 
+      where: { email: session.user.email },
+      include: { settings: true }
+    });
+    
+    const apiKey = user?.settings?.geminiApiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) return NextResponse.json({ error: "No API Key found." }, { status: 400 });
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const systemPrompt = `You are a master Creative Director and Retention Engineer. Analyze this script and provide 3 high-impact "1% improvements".
-Script: ${script}
-
-You MUST include diverse, multi-disciplinary suggestions. Provide exactly:
-1. One Audio/SFX suggestion (e.g., specific music cuts, sound effects, or riser cues).
-2. One Visual/B-Roll suggestion (e.g., specific transitions like match-cuts, dolly zooms, or visual pattern interrupts).
-3. One Pacing/Delivery suggestion (e.g., specific lines to emphasize, where to hold silence, or where to speed up).
-
-Return ONLY a valid JSON array of objects with this structure:
-[{ "title": "Succinct Title", "suggestion": "Detailed instruction", "impact": "High/Medium/Low" }]
-
-Output ONLY the JSON array. No markdown, no intro text.`;
-
-    const result = await model.generateContent(systemPrompt);
-    const response = await result.response;
-    const text = response.text().trim();
+    const prompt = `You are a master Creative Director analyzing a short-form video script. 
+    Provide 3 high-impact '1% improvements'. You MUST include one Audio/SFX suggestion, one Visual/B-Roll suggestion, and one Hook/Pacing suggestion.
     
-    const jsonString = text.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
-    const suggestions = JSON.parse(jsonString);
+    CRITICAL INSTRUCTION: You MUST return ONLY a raw, valid JSON array. Do not include markdown formatting, code blocks (\`\`\`json), or conversational text.
+    
+    Schema Required:
+    [
+      { "title": "Accelerate Payoff", "description": "Specific edit suggestion...", "type": "Visual" },
+      { "title": "...", "description": "...", "type": "Audio" },
+      { "title": "...", "description": "...", "type": "Hook" }
+    ]
+    
+    Script:
+    ${scriptText}`;
 
-    return NextResponse.json({ result: suggestions });
-  } catch (error: any) {
-    console.error("SUGGEST IMPROVEMENTS API ERROR:", error);
-    return NextResponse.json({ error: "Failed to suggest improvements", details: error.message }, { status: 500 });
+    const result = await model.generateContent(prompt);
+    let responseText = result.response.text().trim();
+
+    // Clean the response just in case the AI still wraps it in markdown
+    if (responseText.startsWith('```json')) {
+        responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    } else if (responseText.startsWith('```')) {
+        responseText = responseText.replace(/```/g, '').trim();
+    }
+
+    const suggestions = JSON.parse(responseText);
+
+    return NextResponse.json({ suggestions });
+
+  } catch (error) {
+    console.error("Suggest Improvements API Error:", error);
+    return NextResponse.json({ error: "Failed to parse suggestions", details: error instanceof Error ? error.message : "Unknown" }, { status: 500 });
   }
 }

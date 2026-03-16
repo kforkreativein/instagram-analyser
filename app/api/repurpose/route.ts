@@ -1,53 +1,55 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { NextRequest, NextResponse } from "next/server";
-import { getSettings } from "../../../lib/db";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 60; // Prevent Vercel Timeout
 
-export async function POST(request: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    const { script, platform, language } = body;
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const dbSettings = await getSettings(session.user.id);
-    const apiKey = dbSettings.geminiApiKey;
+    // 1. Parse the incoming body safely
+    const body = await req.json();
+    const scriptText = body.scriptContent || body.script || body.text;
+    const platform = body.platform;
 
-    if (!apiKey) {
-      return NextResponse.json({ error: "API Key not found in Settings." }, { status: 401 });
+    if (!scriptText || !platform) {
+      return NextResponse.json({ error: "Missing script or platform" }, { status: 400 });
     }
 
+    // 2. Fetch User Settings for API Key
+    const user = await prisma.user.findUnique({ 
+      where: { email: session.user.email },
+      include: { settings: true }
+    });
+    
+    const apiKey = user?.settings?.geminiApiKey || process.env.GEMINI_API_KEY;
+    if (!apiKey) return NextResponse.json({ error: "No API Key found. Please add it in Settings." }, { status: 400 });
+
+    // 3. Call the AI
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // Fast model
 
-    const systemPrompt = `You are an expert social media manager. 
-Convert this video script into a highly engaging text post for ${platform}. 
+    const prompt = `You are an expert social media manager. Convert this video script into a highly engaging text post for ${platform}. 
+    If Twitter, make it a concise thread (using 🧵). 
+    If LinkedIn, use a professional but engaging hook with good spacing. 
+    If YouTube, write a community tab post or SEO description. 
+    DO NOT output markdown code blocks like \`\`\` or \`\`\`json. Output ONLY the raw text.
+    
+    Script:
+    ${scriptText}`;
 
-PLATFORM GUIDELINES:
-- If Twitter/X: Make it a concise thread with a high-impact hook and value-packed tweets.
-- If LinkedIn: Use a professional but engaging hook with good spacing (Broetry format).
-- If YouTube: Write a community tab post or SEO-optimized video description.
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
 
-CRITICAL RULES:
-- DO NOT output markdown code blocks.
-- Output ONLY the raw text. No intro or outro filler.
-- Language: ${language || 'English'}.
+    // 4. Return success
+    return NextResponse.json({ repurposedContent: responseText });
 
-Script:
-${script}`;
-
-    const result = await model.generateContent(systemPrompt);
-    const response = await result.response;
-    const output = response.text().trim();
-
-    return NextResponse.json({ result: output });
-  } catch (error: any) {
-    console.error("REPURPOSE API ERROR:", error);
-    return NextResponse.json({ error: "Failed to repurpose content", details: error.message }, { status: 500 });
+  } catch (error) {
+    console.error("Repurpose API Error:", error);
+    return NextResponse.json({ error: "Internal Server Error", details: error instanceof Error ? error.message : "Unknown" }, { status: 500 });
   }
 }

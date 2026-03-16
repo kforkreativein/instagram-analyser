@@ -28,6 +28,7 @@ type GenerateScriptBody = {
   openaiApiKey?: string;
   geminiApiKey?: string;
   anthropicApiKey?: string;
+  videoLength?: string | number;
 };
 
 function parseEngine(value: unknown): CreativeEngine {
@@ -62,11 +63,15 @@ function buildPrompt(body: GenerateScriptBody): string {
   const storyStructure = toStringSafe(body.storyStructure || body.styleTitle, "Style");
   const emotion = toStringSafe(body.emotion, "Engaging");
   const intensity = toStringSafe(String(body.intensity || ""), "5");
+  const videoLength = parseInt(String(body.videoLength || "60")) || 60;
+  const targetWordCount = Math.floor(videoLength * 2.5);
 
   const structureInstruction = structurePrompts[storyStructure] || "Format the script with a clear Hook, Body, and CTA.";
+  const lengthInstruction = `CRITICAL LENGTH CONSTRAINT: This script is for a ${videoLength}-second short-form video. Therefore, the ENTIRE script (excluding bracketed tags) MUST be approximately ${targetWordCount} words long. You will be penalized if the script is too long. Keep sentences punchy and fast-paced.`;
 
   return [
-    "Write a compelling short-form video script in 90-120 words.",
+    lengthInstruction,
+    "Write a compelling short-form video script.",
     "Follow the 4 hook commandments: ALIGNMENT, SPEED TO VALUE, CLARITY, CURIOSITY GAP.",
     "Write with 1 topic / 1 takeaway.",
     "Tone: conversational, punchy, human, non-corny.",
@@ -131,7 +136,13 @@ export async function POST(request: NextRequest) {
         model: "claude-3-5-sonnet-latest",
         max_tokens: 800,
         temperature: 0.6,
-        system: "You are a world-class short-form script writer.",
+        system:    "You are an expert Hollywood scriptwriter and social media strategist. " +
+    "Your goal is to write a highly engaging, viral-ready script based on the provided topic, research, and structure. " +
+    "STRICT FORMATING RULES:\n" +
+    "1. Use exactly TWO line breaks (\\n\\n) between every section.\n" +
+    "2. Every script MUST start with [HOOK], followed by [BODY], and end with [CTA].\n" +
+    "3. No bolding (**), no bullet points, no directional cues like (Smiling) or [Camera Zoom].\n" +
+    "4. Return ONLY the script text using these segment tags.",
         messages: [{ role: "user", content: prompt }],
       });
 

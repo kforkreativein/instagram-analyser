@@ -400,21 +400,22 @@ export default function VideoAnalysisDetail({
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <div className="relative mx-auto aspect-[9/16] w-full max-w-sm overflow-hidden rounded-2xl border border-[#2c2c2e] bg-black shadow-2xl shadow-black/50">
               {mediaUrl && !videoFailed ? (
-                <video
-                  src={`${mediaUrl}#t=0.001`}
-                  preload="metadata"
-                  muted
-                  loop
-                  playsInline
-                  controls
-                  controlsList="nodownload"
-                  autoPlay
-                  className="h-full w-full object-cover"
-                  onError={() => setVideoFailed(true)}
-                />
+                  <video
+                    src={`${mediaUrl}#t=0.001`}
+                    preload="metadata"
+                    muted
+                    loop
+                    playsInline
+                    controls
+                    referrerPolicy="no-referrer"
+                    controlsList="nodownload"
+                    autoPlay
+                    className="h-full w-full object-cover"
+                    onError={() => setVideoFailed(true)}
+                  />
               ) : fallbackImage ? (
                 <div className="relative h-full w-full">
-                  <img src={fallbackImage} alt={captionHeading} className="h-full w-full object-cover" />
+                  <img src={fallbackImage} alt={captionHeading} referrerPolicy="no-referrer" className="h-full w-full object-cover" />
                   <div className="pointer-events-none absolute inset-0 grid place-items-center">
                     <Play className="h-16 w-16 text-white/50" fill="rgba(255,255,255,0.25)" />
                   </div>

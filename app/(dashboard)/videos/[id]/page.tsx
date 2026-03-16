@@ -374,6 +374,7 @@ export default function VideoAnalysisPage() {
                           className="absolute inset-0 w-full h-full object-cover"
                           playsInline
                           loop
+                          referrerPolicy="no-referrer"
                           muted={isMuted}
                           onPlay={() => setIsPlaying(true)}
                           onPause={() => setIsPlaying(false)}
@@ -382,7 +383,7 @@ export default function VideoAnalysisPage() {
                           onClick={togglePlay}
                         />
                       ) : (
-                        <img src={post.displayUrl || post.thumbnailUrl} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={post.displayUrl || post.thumbnailUrl} alt="Preview" referrerPolicy="no-referrer" className="w-full h-full object-cover" />
                       )}
 
                       {/* Gradient Overlay */}
