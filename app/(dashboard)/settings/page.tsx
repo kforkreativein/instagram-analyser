@@ -81,32 +81,33 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    // Load UI preferences from localStorage (non-sensitive)
-    const parsed = parseLocalSettings(localStorage.getItem(LOCAL_SETTINGS_KEY));
-    const nextProvider = parseStoredProvider(localStorage.getItem(ACTIVE_PROVIDER_STORAGE_KEY)) || fromAiProvider(parsed.aiProvider);
-    const storedModel = (localStorage.getItem(ACTIVE_MODEL_STORAGE_KEY) || "").trim();
-    const nextModel = MODELS_BY_PROVIDER[nextProvider].includes(storedModel) ? storedModel : MODELS_BY_PROVIDER[nextProvider][0];
-
-    setEmailAddress(localStorage.getItem(EMAIL_STORAGE_KEY) || "");
-    setActiveProvider(nextProvider);
-    setActiveModel(nextModel);
-    const storedTtsProvider = localStorage.getItem("ttsProvider") as "ElevenLabs" | "Gemini" | "Sarvam AI" | "Google TTS" | null;
-    if (storedTtsProvider) setTtsProvider(storedTtsProvider);
-    setAgencyName(localStorage.getItem("agencyName") || "");
-    setAgencyLogoPreview(localStorage.getItem("agencyLogo") || "");
-
-    // Load API keys from server (per-user, isolated) and populate form fields
+ 
+    // Load UI preferences from localStorage (non-sensitive fallback)
+    const storedProvider = localStorage.getItem(ACTIVE_PROVIDER_STORAGE_KEY) as ProviderOption | null;
+    if (storedProvider) setActiveProvider(storedProvider);
+    
+    // Load all settings from server (Source of Truth)
     void fetch("/api/settings")
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
         if (!data) return;
-        if (data.geminiApiKey) { setGeminiApiKey(data.geminiApiKey); localStorage.setItem("GEMINI_API_KEY", data.geminiApiKey); localStorage.setItem("geminiApiKey", data.geminiApiKey); }
-        if (data.openaiApiKey) { setOpenaiApiKey(data.openaiApiKey); localStorage.setItem("OPENAI_API_KEY", data.openaiApiKey); localStorage.setItem("openAiApiKey", data.openaiApiKey); }
-        if (data.anthropicApiKey) { setAnthropicApiKey(data.anthropicApiKey); localStorage.setItem("ANTHROPIC_API_KEY", data.anthropicApiKey); localStorage.setItem("anthropicApiKey", data.anthropicApiKey); }
-        if (data.apifyApiKey) { setApifyApiKey(data.apifyApiKey); localStorage.setItem("APIFY_API_KEY", data.apifyApiKey); }
-        if (data.elevenlabsApiKey) { setElevenLabsApiKey(data.elevenlabsApiKey); localStorage.setItem("elevenLabsApiKey", data.elevenlabsApiKey); }
-        if (data.sarvamApiKey) { setSarvamApiKey(data.sarvamApiKey); localStorage.setItem("sarvamApiKey", data.sarvamApiKey); }
+        
+        // Keys & Config
+        if (data.geminiApiKey) setGeminiApiKey(data.geminiApiKey);
+        if (data.openaiApiKey) setOpenaiApiKey(data.openaiApiKey);
+        if (data.anthropicApiKey) setAnthropicApiKey(data.anthropicApiKey);
+        if (data.apifyApiKey) setApifyApiKey(data.apifyApiKey);
+        if (data.elevenlabsApiKey) setElevenLabsApiKey(data.elevenlabsApiKey);
+        if (data.sarvamApiKey) setSarvamApiKey(data.sarvamApiKey);
+        
+        // Branding
+        if (data.agencyName) setAgencyName(data.agencyName);
+        if (data.agencyLogo) setAgencyLogoPreview(data.agencyLogo);
+        
+        // Provider & Model
+        if (data.activeProvider) setActiveProvider(data.activeProvider.toLowerCase() as ProviderOption);
+        if (data.activeModel) setActiveModel(data.activeModel);
+
         setServerSavedKeys({
           geminiApiKey: !!data.geminiApiKey,
           openaiApiKey: !!data.openaiApiKey,
@@ -115,86 +116,74 @@ export default function SettingsPage() {
         });
       });
   }, []);
-
-  // Removed local toast timeout effect
-
+ 
+  // Sync model list when provider changes
   useEffect(() => {
     if (!MODELS_BY_PROVIDER[activeProvider].includes(activeModel)) {
       setActiveModel(MODELS_BY_PROVIDER[activeProvider][0]);
     }
   }, [activeProvider, activeModel]);
-
-  function handleSave() {
-    const nextEmail = emailAddress.trim();
-    const nextApify = apifyApiKey.trim();
-    const nextOpenAi = openaiApiKey.trim();
-    const nextGemini = geminiApiKey.trim();
-    const nextAnthropic = anthropicApiKey.trim();
-    const provider = toAiProvider(activeProvider);
-
+ 
+  async function handleSave() {
     // Helper: strip out literal 'undefined' / 'null' strings before persisting
     const cleanKey = (val: string | null | undefined) =>
       val && val !== "undefined" && val !== "null" ? val.trim() : "";
+ 
+    const payload = {
+      geminiApiKey: cleanKey(geminiApiKey),
+      openaiApiKey: cleanKey(openaiApiKey),
+      anthropicApiKey: cleanKey(anthropicApiKey),
+      apifyApiKey: cleanKey(apifyApiKey),
+      elevenlabsApiKey: cleanKey(elevenLabsApiKey),
+      sarvamApiKey: cleanKey(sarvamApiKey),
+      agencyName: agencyName.trim(),
+      agencyLogo: agencyLogoPreview,
+      activeProvider: activeProvider.charAt(0).toUpperCase() + activeProvider.slice(1),
+      activeModel: activeModel,
+    };
 
-    const displayProvider =
-      activeProvider === "openai" ? "OpenAI" : activeProvider === "anthropic" ? "Anthropic" : "Gemini";
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-    // UI preferences only — non-sensitive, stored locally
-    localStorage.setItem(EMAIL_STORAGE_KEY, nextEmail);
-    localStorage.setItem(ACTIVE_PROVIDER_STORAGE_KEY, activeProvider);
-    localStorage.setItem(ACTIVE_MODEL_STORAGE_KEY, activeModel);
-    localStorage.setItem("activeProvider", displayProvider);
-    localStorage.setItem("activeModel", activeModel || "gemini-3-flash-preview");
-    localStorage.setItem("analysisEngine", provider === "gemini" ? "gemini" : "openai");
-    localStorage.setItem("ttsProvider", ttsProvider);
-    localStorage.setItem("agencyName", agencyName.trim());
-
-    // Persist API keys to server-side database (per-user, isolated)
-    void fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        geminiApiKey: cleanKey(nextGemini),
-        openaiApiKey: cleanKey(nextOpenAi),
-        anthropicApiKey: cleanKey(nextAnthropic),
-        apifyApiKey: cleanKey(nextApify),
-        elevenlabsApiKey: cleanKey(elevenLabsApiKey.trim()),
-        sarvamApiKey: cleanKey(sarvamApiKey.trim()),
-      }),
-    }).then((r) => {
-      if (r.ok) {
+      if (res.ok) {
         setServerSavedKeys({
-          geminiApiKey: !!cleanKey(nextGemini),
-          openaiApiKey: !!cleanKey(nextOpenAi),
-          anthropicApiKey: !!cleanKey(nextAnthropic),
-          apifyApiKey: !!cleanKey(nextApify),
+          geminiApiKey: !!payload.geminiApiKey,
+          openaiApiKey: !!payload.openaiApiKey,
+          anthropicApiKey: !!payload.anthropicApiKey,
+          apifyApiKey: !!payload.apifyApiKey,
         });
-        // Also mirror to localStorage so other pages continue to work
-        localStorage.setItem("geminiApiKey", cleanKey(nextGemini));
-        localStorage.setItem("openAiApiKey", cleanKey(nextOpenAi));
-        localStorage.setItem("anthropicApiKey", cleanKey(nextAnthropic));
-        localStorage.setItem("GEMINI_API_KEY", cleanKey(nextGemini));
-        localStorage.setItem("OPENAI_API_KEY", cleanKey(nextOpenAi));
-        localStorage.setItem("ANTHROPIC_API_KEY", cleanKey(nextAnthropic));
-        localStorage.setItem("APIFY_API_KEY", cleanKey(nextApify));
-        localStorage.setItem("elevenLabsApiKey", cleanKey(elevenLabsApiKey.trim()));
-        localStorage.setItem("sarvamApiKey", cleanKey(sarvamApiKey.trim()));
-        toast("success", "Settings Saved", "Your configuration has been updated.");
+
+        // Mirror to localStorage for legacy components that still use it
+        localStorage.setItem("agencyName", payload.agencyName);
+        localStorage.setItem("agencyLogo", payload.agencyLogo);
+        localStorage.setItem(ACTIVE_PROVIDER_STORAGE_KEY, activeProvider);
+        localStorage.setItem(ACTIVE_MODEL_STORAGE_KEY, activeModel);
+        
+        toast("success", "Settings Saved", "Your configuration has been updated across the app.");
+        
+        // Dispatch event to update Sidebar/Header in real-time
+        window.dispatchEvent(new CustomEvent("settingsUpdated"));
       } else {
         toast("error", "Save Failed", "Could not save settings to server.");
       }
-    });
+    } catch (error) {
+      console.error("Save error:", error);
+      toast("error", "Save Failed", "An unexpected error occurred.");
+    }
   }
-
+ 
   function handleLogoUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-
+ 
     const reader = new FileReader();
     reader.onload = (e) => {
       const base64String = e.target?.result as string;
       setAgencyLogoPreview(base64String);
-      localStorage.setItem("agencyLogo", base64String);
     };
     reader.readAsDataURL(file);
   }

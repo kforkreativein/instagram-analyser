@@ -164,25 +164,14 @@ export async function POST(request: NextRequest) {
 
         // Fetch user's Apify API key from database
         let apifyApiKey = (body.apifyApiKey || "").trim(); // fallback to body if provided
-        try {
-          const session = await getServerSession(authOptions);
-          if (session?.user?.email) {
-            const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-            if (user?.id) {
-              const userSettings = await prisma.settings.findUnique({ where: { userId: user.id } });
-              if (userSettings?.apifyApiKey) {
-                apifyApiKey = userSettings.apifyApiKey;
-              }
-            }
+        const session = await getServerSession(authOptions);
+        if (!apifyApiKey && session?.user?.id) {
+          try {
+            const dbSettings = await getSettings(session.user.id);
+            apifyApiKey = dbSettings.apifyApiKey;
+          } catch (error) {
+            console.error("Failed to fetch user settings:", error);
           }
-        } catch (error) {
-          console.error("Failed to fetch user settings:", error);
-          // Continue with body.apifyApiKey or environment fallback
-        }
-        
-        // Fallback to environment variable if user hasn't set it
-        if (!apifyApiKey) {
-          apifyApiKey = getSettings().apifyApiKey;
         }
         
         if (!apifyApiKey) {

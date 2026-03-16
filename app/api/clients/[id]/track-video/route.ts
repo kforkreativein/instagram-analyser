@@ -1,22 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 import crypto from "crypto";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getSettings } from "@/lib/db";
 
-const DB_PATH = path.join(process.cwd(), "database.json");
-
-function readDB() {
-  const data = fs.readFileSync(DB_PATH, "utf8");
-  return JSON.parse(data);
-}
-
-function writeDB(data: any) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
-}
+export const runtime = "nodejs";
 
 // Ensure unique platform naming
 function detectPlatform(url: string) {
@@ -27,30 +17,17 @@ function detectPlatform(url: string) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { videoUrl, apifyApiKey: bodyApifyKey, geminiApiKey: bodyGeminiKey } = await req.json();
     const clientId = params.id;
 
     // Fetch user's API keys from database
-    let apifyToken = bodyApifyKey;
-    let geminiKey = bodyGeminiKey;
-    try {
-      const session = await getServerSession(authOptions);
-      if (session?.user?.email) {
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-        if (user?.id) {
-          const userSettings = await prisma.settings.findUnique({ where: { userId: user.id } });
-          if (userSettings?.apifyApiKey) {
-            apifyToken = userSettings.apifyApiKey;
-          }
-          if (userSettings?.geminiApiKey) {
-            geminiKey = userSettings.geminiApiKey;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch user settings:", error);
-    }
+    const dbSettings = await getSettings(session.user.id);
+    let apifyToken = bodyApifyKey || dbSettings.apifyApiKey;
+    let geminiKey = bodyGeminiKey || dbSettings.geminiApiKey;
 
     if (!videoUrl) {
       return NextResponse.json({ error: "Missing required field: videoUrl" }, { status: 400 });
@@ -70,7 +47,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     console.log(`[Track-Video] Scraping ${platform} URL: ${videoUrl}`);
 
     if (platform === "Instagram") {
-      // Standard apify~instagram-scraper (included in plan, no rental needed)
       const apifyUrl = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${apifyToken}`;
 
       const apifyRes = await fetch(apifyUrl, {
@@ -88,16 +64,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
       const items = await apifyRes.json();
 
-      // 🔥 FORCE TERMINAL LOG
-      console.log("🔥 APIFY RAW DATA 🔥:", JSON.stringify(items[0] || items).substring(0, 500));
-
       if (!items || items.length === 0) {
         console.error("❌ APIFY FAILED: Returned empty array. URL might be invalid or private.");
       }
 
       const item = items[0] || {};
-
-      // Check for restricted/login-required error
       const isRestricted = (items as any).error === 'restricted_page' || item.error === 'restricted_page';
 
       thumbnailUrl = isRestricted ? "" : (item.displayUrl || item.thumbnailUrl || item.resources?.[0]?.src || "");
@@ -148,7 +119,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // 2. Deep Analysis with Gemini
     const selectedModel = "gemini-2.5-flash";
-    console.log(`[Track-Video] Generating Deep Analysis with model: ${selectedModel}`);
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: selectedModel });
 
@@ -175,7 +145,6 @@ Return ONLY valid JSON. No markdown formatting blocks.`;
       text = text.replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/i, "").trim();
       analysisOutput = JSON.parse(text);
     } catch (e) {
-      console.warn("Failed to parse Deep Analysis JSON. Using generic fallback.");
       analysisOutput = {
         narrative: { topic: "Unknown", seed: "Unknown", substance: transcript.substring(0, 100), storyStructure: "Storytelling" },
         hooks: { spokenHook: "Unknown", visualHook: "", textHook: "", hookType: "Contrarian" },
@@ -185,13 +154,16 @@ Return ONLY valid JSON. No markdown formatting blocks.`;
     }
 
     // 3. Save to database
-    console.log(`[Track-Video] Saving tracked video to client DB...`);
-    const db = readDB();
-    const clientIndex = db.clients.findIndex((c: any) => c.id === clientId);
-    if (clientIndex === -1) {
+    const client = await prisma.client.findFirst({
+        where: { id: clientId, userId: session.user.id }
+    });
+
+    if (!client) {
       return NextResponse.json({ error: "Client not found" }, { status: 404 });
     }
 
+    const trackedVideos = Array.isArray(client.trackedVideos) ? (client.trackedVideos as any[]) : [];
+    
     const newVideo = {
       id: crypto.randomUUID(),
       url: videoUrl,
@@ -204,12 +176,12 @@ Return ONLY valid JSON. No markdown formatting blocks.`;
       lastRefreshed: new Date().toISOString()
     };
 
-    if (!db.clients[clientIndex].trackedVideos) {
-      db.clients[clientIndex].trackedVideos = [];
-    }
-    db.clients[clientIndex].trackedVideos.push(newVideo);
-    
-    writeDB(db);
+    trackedVideos.push(newVideo);
+
+    const updatedClient = await prisma.client.update({
+        where: { id: clientId },
+        data: { trackedVideos }
+    });
 
     return NextResponse.json(newVideo);
   } catch (error: any) {
@@ -219,6 +191,9 @@ Return ONLY valid JSON. No markdown formatting blocks.`;
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const { searchParams } = new URL(req.url);
     const videoId = searchParams.get("videoId");
@@ -228,22 +203,27 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ error: "Missing videoId parameter." }, { status: 400 });
     }
 
-    const db = readDB();
-    const clientIndex = db.clients.findIndex((c: any) => c.id === clientId);
-    if (clientIndex === -1) {
+    const client = await prisma.client.findFirst({
+        where: { id: clientId, userId: session.user.id }
+    });
+
+    if (!client) {
       return NextResponse.json({ error: "Client not found." }, { status: 404 });
     }
 
-    const before = (db.clients[clientIndex].trackedVideos || []).length;
-    db.clients[clientIndex].trackedVideos = (db.clients[clientIndex].trackedVideos || []).filter(
-      (v: any) => v.id !== videoId
-    );
+    const trackedVideos = Array.isArray(client.trackedVideos) ? (client.trackedVideos as any[]) : [];
+    const before = trackedVideos.length;
+    const filteredVideos = trackedVideos.filter((v: any) => v.id !== videoId);
 
-    if (db.clients[clientIndex].trackedVideos.length === before) {
+    if (filteredVideos.length === before) {
       return NextResponse.json({ error: "Video not found." }, { status: 404 });
     }
 
-    writeDB(db);
+    await prisma.client.update({
+        where: { id: clientId },
+        data: { trackedVideos: filteredVideos }
+    });
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Delete Video API Error:", error);

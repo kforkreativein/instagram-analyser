@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 const navItems = [
   {
@@ -40,15 +40,36 @@ const navItems = [
 
 export default function AppSidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   // Dynamic branding from Settings
-  const [agencyName, setAgencyName] = useState("Outlier Studio");
+  const [agencyName, setAgencyName] = useState("");
   const [agencyLogo, setAgencyLogo] = useState("");
 
+  const fetchBranding = async () => {
+    try {
+      const res = await fetch("/api/settings");
+      const data = await res.json();
+      if (data) {
+        setAgencyName(data.agencyName);
+        setAgencyLogo(data.agencyLogo);
+      }
+    } catch (error) {
+      console.error("Failed to fetch branding:", error);
+    }
+  };
+
   useEffect(() => {
-    setAgencyName(localStorage.getItem("agencyName") || "Outlier Studio");
-    setAgencyLogo(localStorage.getItem("agencyLogo") || "");
+    fetchBranding();
+    
+    // Listen for custom event "settingsUpdated" for real-time sync across components
+    const handleUpdate = () => fetchBranding();
+    window.addEventListener("settingsUpdated", handleUpdate);
+    return () => window.removeEventListener("settingsUpdated", handleUpdate);
   }, []);
+
+  const displayName = agencyName || session?.user?.email || "Outlier Studio";
+  const displayLogo = agencyLogo || "/branding/full-logo.png";
 
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-[240px] md:w-[260px] lg:w-[280px] shrink-0 bg-[rgba(8,10,15,0.97)] border-r border-[rgba(255,255,255,0.06)] z-[100] flex flex-col">
@@ -56,8 +77,8 @@ export default function AppSidebar() {
       <div className="px-6 h-[89px] flex items-center border-b border-white/5 shrink-0">
         <Link href="/" className="block cursor-pointer no-underline group hover:opacity-90 transition-opacity">
           <img
-            src="/branding/full-logo.png"
-            alt="Outlier Studio"
+            src={displayLogo}
+            alt={displayName}
             className="w-auto h-[89px] object-contain flex-shrink-0"
           />
         </Link>
@@ -115,11 +136,11 @@ export default function AppSidebar() {
             </div>
           ) : (
             <div className="w-[26px] h-[26px] rounded-[7px] flex items-center justify-center bg-gradient-to-br from-[#FF3B57] to-[#FF8C42] shrink-0">
-              <span className="font-['Syne'] font-[800] text-[11px] text-white">{agencyName.charAt(0).toUpperCase()}</span>
+              <span className="font-['Syne'] font-[800] text-[11px] text-white">{displayName.charAt(0).toUpperCase()}</span>
             </div>
           )}
           <span className="text-[11.5px] font-['DM_Sans'] text-[#8892A4] truncate">
-            {agencyName}
+            {displayName}
           </span>
           <button
             onClick={() => signOut({ callbackUrl: '/signin' })}

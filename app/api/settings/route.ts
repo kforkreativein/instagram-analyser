@@ -33,6 +33,10 @@ export async function GET(request: NextRequest) {
       apifyApiKey: settings.apifyApiKey ?? "",
       elevenlabsApiKey: settings.elevenlabsApiKey ?? "",
       sarvamApiKey: settings.sarvamApiKey ?? "",
+      agencyName: settings.agencyName ?? "",
+      agencyLogo: settings.agencyLogo ?? "",
+      activeProvider: settings.activeProvider ?? "Gemini",
+      activeModel: settings.activeModel ?? "Gemini 2.5 Flash",
     });
   } catch (error) {
     return NextResponse.json(
@@ -54,7 +58,11 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json() as Record<string, unknown>;
-    const allowed = ["geminiApiKey", "openaiApiKey", "anthropicApiKey", "apifyApiKey", "elevenlabsApiKey", "sarvamApiKey"];
+    const allowed = [
+      "geminiApiKey", "openaiApiKey", "anthropicApiKey", "apifyApiKey", 
+      "elevenlabsApiKey", "sarvamApiKey", "agencyName", "agencyLogo",
+      "activeProvider", "activeModel"
+    ];
     const update: Record<string, string | null> = {};
 
     for (const key of allowed) {

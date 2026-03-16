@@ -1,8 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../lib/generated/prisma"
 }
 
@@ -10,7 +7,6 @@ datasource db {
   provider = "postgresql"
 }
 
-// Authentication & User Management
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -21,72 +17,137 @@ model User {
   clients   Client[]
   scripts   Script[]
   uploads   Upload[]
+  watchlist Watchlist[]
+  history   History[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Settings {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  geminiApiKey      String?
-  apifyApiKey       String?
-  openaiApiKey      String?
-  anthropicApiKey   String?
-  elevenlabsApiKey  String?
-  sarvamApiKey      String?
-  activeProvider    String?
-  activeModel       String?
+  agencyName       String?  // To remember: "K for Kreative"
+  agencyLogo       String?  // To store the URL of the uploaded logo
+  geminiApiKey     String?
+  apifyApiKey      String?
+  openaiApiKey     String?
+  anthropicApiKey  String?
+  elevenlabsApiKey String?
+  sarvamApiKey     String?
+  notionApiKey     String?
+  notionDatabaseId String?
+  activeProvider   String?  @default("Gemini")
+  activeModel      String?  @default("Gemini 2.5 Flash")
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
-// Content Management
 model Client {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  name      String
-  language  String?
-  duration  String?
+  name              String
+  niche             String?
+  platform          String?  @default("Instagram")
+  language          String?
+  duration          String?
+  targetAudience    String?
+  tonePersona       String?
+  vocabularyLevel   String?
+  preferredTopics   String?
+  avoidTopics       String?
+  ctaStyle          String?
+  customInstructions String? @db.Text
+  preferredHooks    Json?    // Array of hook objects
+  examples          Json?    // Array of script examples
+  trackedVideos     Json?    // Array of video data
+  styleDNA          Json?    // Style analysis object
   
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  scripts           Script[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
   
   @@index([userId])
 }
 
 model Script {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   
-  title     String
-  content   String   @db.Text
-  type      String?  // "Remix" or "Original"
+  title       String
+  content     String   @db.Text
+  type        String?  // "Remix" or "Original"
+  hooks       Json?    // A/B hooks state
+  caption     String?  @db.Text
+  repurposed  String?  @db.Text
+  scriptJob   String?
+  directorsCut Json?
+  prompts     Json?
+  packaging   Json?
   
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([clientId])
+}
+
+model Upload {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  fileName    String
+  analysis    Json?
+  transcript  String? @db.Text
+  thumbnail   String? @db.Text
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
   @@index([userId])
 }
 
-model Upload {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Watchlist {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  fileName  String
-  analysis  Json?
-  transcript String? @db.Text
-  thumbnail  String? @db.Text
+  username      String
+  platform      String?  @default("Instagram")
+  url           String?
+  followers     Int?
+  miningQuadrant String?
+  profilePicUrl String?  @db.Text
+  isVerified    Boolean? @default(false)
   
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@index([userId])
+  @@unique([userId, username])
+}
+
+model History {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  savedAt     DateTime @default(now())
+  post        Json     // Instagram post data
+  analysis    Json     // AI analysis data
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
   @@index([userId])
 }

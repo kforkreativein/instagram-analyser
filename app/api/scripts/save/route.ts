@@ -1,26 +1,9 @@
-import fs from "fs/promises";
-import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
-
-const scriptsPath = path.join(process.cwd(), "scripts-database.json");
-
-async function readScripts(): Promise<any[]> {
-    try {
-        const raw = await fs.readFile(scriptsPath, "utf8");
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed.scripts) ? parsed.scripts : [];
-    } catch {
-        return [];
-    }
-}
-
-async function writeScripts(scripts: any[]): Promise<void> {
-    await fs.writeFile(scriptsPath, JSON.stringify({ scripts }, null, 2), "utf8");
-}
 
 // POST: replace entire scripts array (legacy bulk save)
 export async function POST(request: NextRequest) {
@@ -31,9 +14,32 @@ export async function POST(request: NextRequest) {
     try {
         const payload = (await request.json().catch(() => ({}))) as any;
         const scripts = Array.isArray(payload.scripts) ? payload.scripts : [];
-        await writeScripts(scripts);
+        
+        await prisma.$transaction([
+            prisma.script.deleteMany({
+                where: { userId: session.user.id }
+            }),
+            prisma.script.createMany({
+                data: scripts.map((s: any) => ({
+                    userId: session.user.id,
+                    clientId: s.clientId,
+                    title: s.title || "Untitled",
+                    content: s.content || "",
+                    type: s.type || "Original",
+                    hooks: s.hooks,
+                    caption: s.caption,
+                    repurposed: s.repurposed,
+                    scriptJob: s.scriptJob,
+                    directorsCut: s.directorsCut,
+                    prompts: s.prompts,
+                    packaging: s.packaging,
+                }))
+            })
+        ]);
+
         return NextResponse.json({ success: true, count: scripts.length });
     } catch (error) {
+        console.error("[SCRIPTS_SAVE_POST]", error);
         return NextResponse.json(
             { error: error instanceof Error ? error.message : "Write failed" },
             { status: 500 },
@@ -48,24 +54,31 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     try {
-        const script = (await request.json().catch(() => null)) as any;
-        if (!script || !script.id) {
+        const scriptData = (await request.json().catch(() => null)) as any;
+        if (!scriptData || !scriptData.id) {
             return NextResponse.json({ error: "Script id is required" }, { status: 400 });
         }
 
-        const scripts = await readScripts();
-        const existingIdx = scripts.findIndex((s: any) => s.id === script.id);
+        const { id, ...updates } = scriptData;
 
-        if (existingIdx !== -1) {
-            scripts[existingIdx] = { ...scripts[existingIdx], ...script, updatedAt: new Date().toISOString() };
-        } else {
-            // Stamp userId on new scripts
-            scripts.push({ ...script, userId: session.user.id, createdAt: script.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
-        }
+        const updated = await prisma.script.upsert({
+            where: {
+                id: id
+            },
+            update: {
+                ...updates,
+                updatedAt: new Date()
+            },
+            create: {
+                id: id,
+                userId: session.user.id,
+                ...updates
+            }
+        });
 
-        await writeScripts(scripts);
-        return NextResponse.json({ success: true, script: existingIdx !== -1 ? scripts[existingIdx] : scripts[scripts.length - 1] });
+        return NextResponse.json({ success: true, script: updated });
     } catch (error) {
+        console.error("[SCRIPTS_SAVE_PUT]", error);
         return NextResponse.json(
             { error: error instanceof Error ? error.message : "Save failed" },
             { status: 500 },

@@ -905,7 +905,7 @@ function ScriptsPageContent() {
   const [isClientsLoading, setIsClientsLoading] = useState(false);
 
   const selectedClient = useMemo(() => 
-    clients.find(c => c.id === selectedClientId) || null
+    (clients || []).find(c => c.id === selectedClientId) || null
   , [clients, selectedClientId]);
 
   useEffect(() => {
@@ -920,7 +920,7 @@ function ScriptsPageContent() {
         const clientIdParam = searchParams.get("client");
         if (clientIdParam) {
           setSelectedClientId(clientIdParam);
-          const client = data.find((c: any) => c.id === clientIdParam);
+          const client = (data || []).find((c: any) => c.id === clientIdParam);
           if (client) {
             if (client.language) setActiveLanguage(client.language);
             if (client.duration) {

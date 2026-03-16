@@ -1,10 +1,15 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import { getSettings } from "../../../lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const body = await request.json();
 
@@ -12,7 +17,7 @@ export async function POST(request: NextRequest) {
     const { tweakAttribute = "", analysis = {}, transcript = "", onePercentFocus = "", selectedModel = "gemini-1.5-pro", clientProfile } = body;
 
     // 2. SAFELY PULL API KEY (From body OR Settings Database)
-    const dbSettings = getSettings();
+    const dbSettings = await getSettings(session.user.id);
     const apiKey = body.geminiApiKey || dbSettings.geminiApiKey;
 
     // 3. STRICT VALIDATION

@@ -1,12 +1,37 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 export default function Topbar() {
     const pathname = usePathname();
     const router = useRouter();
+    const { data: session } = useSession();
+
+    // Dynamic branding
+    const [agencyName, setAgencyName] = useState("");
+
+    const fetchBranding = async () => {
+        try {
+            const res = await fetch("/api/settings");
+            const data = await res.json();
+            if (data?.agencyName) {
+                setAgencyName(data.agencyName);
+            }
+        } catch (error) {
+            console.error("Failed to fetch branding:", error);
+        }
+    };
+
+    useEffect(() => {
+        fetchBranding();
+        const handleUpdate = () => fetchBranding();
+        window.addEventListener("settingsUpdated", handleUpdate);
+        return () => window.removeEventListener("settingsUpdated", handleUpdate);
+    }, []);
 
     // Format pathname to a readable page name
     const getPageName = () => {
@@ -31,7 +56,7 @@ export default function Topbar() {
         <header className="sticky top-0 bg-[rgba(8,10,15,0.85)] backdrop-blur-[24px] border-b border-[rgba(255,255,255,0.06)] px-4 md:px-6 h-[89px] flex flex-col md:flex-row items-center justify-between gap-4 z-50">
             {/* Breadcrumb (Left-Aligned) */}
             <div className="pl-6 flex-1 flex items-center min-w-0 font-['JetBrains_Mono'] text-[10px] text-[#5A6478] tracking-[0.12em] uppercase truncate w-full">
-                OUTLIER.STUDIO / <span className={`ml-[4px] font-[500] truncate ${getAccentColorClass()}`}>{getPageName()}</span>
+                {(agencyName || session?.user?.email || "OUTLIER STUDIO").toUpperCase()} / <span className={`ml-[4px] font-[500] truncate ${getAccentColorClass()}`}>{getPageName()}</span>
             </div>
 
             {/* Action Buttons */}

@@ -1,11 +1,16 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import { getSettings } from "../../../lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
     try {
         const { scriptBody, apiKey } = await req.json();
 
@@ -13,7 +18,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Script body is required" }, { status: 400 });
         }
 
-        const effectiveKey = apiKey || getSettings().geminiApiKey;
+        const dbSettings = await getSettings(session.user.id);
+        const effectiveKey = apiKey || dbSettings.geminiApiKey;
 
         if (!effectiveKey) {
             return NextResponse.json({ error: "API Key not found in Settings. Please go to Settings to add it." }, { status: 401 });

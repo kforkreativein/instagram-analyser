@@ -3,6 +3,8 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSettings } from "../../../../lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,11 +114,14 @@ function buildPrompt(body: GenerateScriptBody): string {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const body = (await request.json().catch(() => ({}))) as GenerateScriptBody;
     const engine = parseEngine(body.engine);
 
-    const dbSettings = getSettings();
+    const dbSettings = await getSettings(session.user.id);
     const openaiApiKey = toStringSafe(body.openaiApiKey) || dbSettings.openaiApiKey;
     const geminiApiKey = toStringSafe(body.geminiApiKey) || dbSettings.geminiApiKey;
     const anthropicApiKey = toStringSafe(body.anthropicApiKey) || dbSettings.anthropicApiKey;

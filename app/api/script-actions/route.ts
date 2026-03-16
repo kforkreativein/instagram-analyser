@@ -1,15 +1,21 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import { getSettings } from "../../../lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   try {
     const body = await request.json();
     const { script, action, geminiApiKey, pacingAnalysis, focusArea, videoLength, clientProfile } = body;
 
-    const apiKey = geminiApiKey || getSettings().geminiApiKey;
+    const dbSettings = await getSettings(session.user.id);
+    const apiKey = geminiApiKey || dbSettings.geminiApiKey;
 
     if (!script) {
       return NextResponse.json({ error: "Missing script content" }, { status: 400 });

@@ -86,24 +86,14 @@ export async function POST(request: NextRequest) {
 
     // Fetch user's Apify key from database
     let apifyToken = (body.apifyApiKey ?? "").trim();
-    try {
-      const session = await getServerSession(authOptions);
-      if (session?.user?.email) {
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-        if (user?.id) {
-          const userSettings = await prisma.settings.findUnique({ where: { userId: user.id } });
-          if (userSettings?.apifyApiKey) {
-            apifyToken = userSettings.apifyApiKey;
-          }
-        }
+    const session = await getServerSession(authOptions);
+    if (!apifyToken && session?.user?.id) {
+      try {
+        const dbSettings = await getSettings(session.user.id);
+        apifyToken = dbSettings.apifyApiKey;
+      } catch (error) {
+        console.error("Failed to fetch user settings:", error);
       }
-    } catch (error) {
-      console.error("Failed to fetch user settings:", error);
-    }
-
-    // Fallback to getSettings
-    if (!apifyToken) {
-      apifyToken = getSettings().apifyApiKey;
     }
 
     if (!apifyToken) {

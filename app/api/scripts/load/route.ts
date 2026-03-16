@@ -1,13 +1,10 @@
-import fs from "fs/promises";
-import path from "path";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const scriptsPath = path.join(process.cwd(), "scripts-database.json");
 
 export async function GET() {
     const session = await getServerSession(authOptions);
@@ -16,23 +13,18 @@ export async function GET() {
     }
 
     try {
-        await fs.access(scriptsPath);
-    } catch {
-        return NextResponse.json({ data: { scripts: [] } });
-    }
-
-    try {
-        const fileData = await fs.readFile(scriptsPath, "utf8");
-        const parsed = JSON.parse(fileData) as any;
-
-        const allScripts = Array.isArray(parsed.scripts) ? parsed.scripts : [];
-        // Filter to only return scripts belonging to this user
-        const scripts = allScripts.filter(
-          (s: any) => !s.userId || s.userId === session.user.id
-        );
+        const scripts = await prisma.script.findMany({
+            where: {
+                userId: session.user.id
+            },
+            orderBy: {
+                updatedAt: 'desc'
+            }
+        });
 
         return NextResponse.json({ data: { scripts } });
-    } catch {
+    } catch (error) {
+        console.error("[SCRIPTS_LOAD]", error);
         return NextResponse.json({ data: { scripts: [] } });
     }
 }

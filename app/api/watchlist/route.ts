@@ -1,18 +1,12 @@
-import fs from "fs/promises";
-import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import type { WatchlistChannel } from "../../../lib/types";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const dbPath = path.join(process.cwd(), "database.json");
-
-type AppDatabase = {
-    history: unknown[];
-    watchlist: WatchlistChannel[];
-};
 
 function sanitizeChannel(payload: unknown): WatchlistChannel | null {
     if (!payload || typeof payload !== "object") {
@@ -34,7 +28,7 @@ function sanitizeChannel(payload: unknown): WatchlistChannel | null {
     const followers = typeof record.followers === "number"
         ? (Number.isFinite(record.followers) ? record.followers : null)
         : typeof record.followers === "string" && record.followers.trim()
-            ? record.followers.trim()
+            ? parseInt(record.followers.trim().replace(/[^0-9]/g, "")) || null
             : null;
 
     const url = typeof record.url === "string" && record.url.trim()
@@ -58,80 +52,34 @@ function sanitizeChannel(payload: unknown): WatchlistChannel | null {
     };
 }
 
-function normalizeWatchlist(payload: unknown): WatchlistChannel[] {
-    if (!Array.isArray(payload)) {
-        return [];
-    }
-
-    const seen = new Set<string>();
-    const watchlist: WatchlistChannel[] = [];
-
-    for (const item of payload) {
-        const channel = sanitizeChannel(item);
-        if (!channel) {
-            continue;
-        }
-
-        const dedupeKey = `${channel.platform}:${channel.username.toLowerCase()}`;
-        if (seen.has(dedupeKey)) {
-            continue;
-        }
-
-        seen.add(dedupeKey);
-        watchlist.push(channel);
-    }
-
-    return watchlist;
-}
-
-function normalizeDatabase(payload: unknown): AppDatabase {
-    if (Array.isArray(payload)) {
-        return { history: payload, watchlist: [] };
-    }
-
-    if (payload && typeof payload === "object") {
-        const record = payload as Record<string, unknown>;
-        const history = Array.isArray(record.history)
-            ? record.history
-            : Array.isArray(record.data)
-                ? record.data
-                : [];
-
-        return {
-            history,
-            watchlist: normalizeWatchlist(record.watchlist),
-        };
-    }
-
-    return { history: [], watchlist: [] };
-}
-
-async function readDatabase(): Promise<AppDatabase> {
-    try {
-        await fs.access(dbPath);
-    } catch {
-        return { history: [], watchlist: [] };
-    }
-
-    try {
-        const fileData = await fs.readFile(dbPath, "utf8");
-        const parsed = JSON.parse(fileData) as unknown;
-        return normalizeDatabase(parsed);
-    } catch {
-        return { history: [], watchlist: [] };
-    }
-}
-
-async function writeDatabase(database: AppDatabase) {
-    await fs.writeFile(dbPath, JSON.stringify(database, null, 2), "utf8");
-}
-
 export async function GET() {
-    const database = await readDatabase();
-    return NextResponse.json({ watchlist: database.watchlist || [] });
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+        return NextResponse.json({ watchlist: [] }, { status: 401 });
+    }
+
+    try {
+        const watchlist = await prisma.watchlist.findMany({
+            where: {
+                userId: session.user.id
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+        return NextResponse.json({ watchlist });
+    } catch (error) {
+        console.error("[WATCHLIST_GET]", error);
+        return NextResponse.json({ watchlist: [] });
+    }
 }
 
 export async function POST(request: NextRequest) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const payload = await request.json().catch(() => ({}));
         const channel = sanitizeChannel(payload);
@@ -140,21 +88,42 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "A valid username is required." }, { status: 400 });
         }
 
-        const database = await readDatabase();
-        const alreadyExists = database.watchlist.some((item) => {
-            return item.platform.toLowerCase() === channel.platform.toLowerCase()
-                && item.username.toLowerCase() === channel.username.toLowerCase();
+        const upserted = await prisma.watchlist.upsert({
+            where: {
+                userId_username: {
+                    userId: session.user.id,
+                    username: channel.username
+                }
+            },
+            update: {
+                platform: channel.platform,
+                url: channel.url,
+                followers: typeof channel.followers === 'string' ? null : channel.followers,
+                miningQuadrant: channel.miningQuadrant,
+                profilePicUrl: channel.profilePicUrl,
+                isVerified: channel.isVerified,
+            },
+            create: {
+                userId: session.user.id,
+                username: channel.username,
+                platform: channel.platform,
+                url: channel.url,
+                followers: typeof channel.followers === 'string' ? null : channel.followers,
+                miningQuadrant: channel.miningQuadrant,
+                profilePicUrl: channel.profilePicUrl,
+                isVerified: channel.isVerified,
+            }
         });
 
-        if (alreadyExists) {
-            return NextResponse.json({ success: true, duplicate: true, watchlist: database.watchlist });
-        }
-
-        const watchlist = [...database.watchlist, channel];
-        await writeDatabase({ ...database, watchlist });
+        // Fetch full updated watchlist
+        const watchlist = await prisma.watchlist.findMany({
+            where: { userId: session.user.id },
+            orderBy: { createdAt: 'desc' }
+        });
 
         return NextResponse.json({ success: true, duplicate: false, watchlist });
     } catch (error) {
+        console.error("[WATCHLIST_POST]", error);
         return NextResponse.json(
             { error: error instanceof Error ? error.message : "Unable to save watchlist." },
             { status: 500 },
@@ -163,12 +132,18 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const payload = await request.json().catch(() => ({})) as { username?: string; clearAll?: boolean };
-        const database = await readDatabase();
 
         if (payload.clearAll) {
-            await writeDatabase({ ...database, watchlist: [] });
+            await prisma.watchlist.deleteMany({
+                where: { userId: session.user.id }
+            });
             return NextResponse.json({ success: true, watchlist: [] });
         }
 
@@ -177,11 +152,23 @@ export async function DELETE(request: NextRequest) {
             return NextResponse.json({ error: "username is required." }, { status: 400 });
         }
 
-        const watchlist = database.watchlist.filter((channel) => channel.username.toLowerCase() !== username.toLowerCase());
-        await writeDatabase({ ...database, watchlist });
+        await prisma.watchlist.delete({
+            where: {
+                userId_username: {
+                    userId: session.user.id,
+                    username: username
+                }
+            }
+        });
+
+        const watchlist = await prisma.watchlist.findMany({
+            where: { userId: session.user.id },
+            orderBy: { createdAt: 'desc' }
+        });
 
         return NextResponse.json({ success: true, watchlist });
     } catch (error) {
+        console.error("[WATCHLIST_DELETE]", error);
         return NextResponse.json(
             { error: error instanceof Error ? error.message : "Unable to update watchlist." },
             { status: 500 },
