@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 const DB_PATH = path.join(process.cwd(), "database.json");
 
@@ -14,22 +16,30 @@ function writeDB(data: any) {
   fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2));
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = readDB();
-    return NextResponse.json(db.clients || []);
+    const allClients = db.clients || [];
+    // Filter to this user's clients (or untagged legacy clients)
+    const clients = allClients.filter((c: any) => !c.userId || c.userId === session.user.id);
+    return NextResponse.json(clients);
   } catch (error) {
     return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = readDB();
     const body = await req.json();
 
     const newClient = {
       id: crypto.randomUUID(),
+      userId: session.user.id,
       name: body.name || "Unnamed Client",
       niche: body.niche || "",
       platform: body.platform || "Instagram",
@@ -59,7 +69,9 @@ export async function POST(req: Request) {
   }
 }
 
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const db = readDB();
     const body = await req.json();
@@ -79,7 +91,9 @@ export async function PUT(req: Request) {
   }
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
@@ -95,3 +109,4 @@ export async function DELETE(req: Request) {
     return NextResponse.json({ error: "Failed to delete client" }, { status: 500 });
   }
 }
+

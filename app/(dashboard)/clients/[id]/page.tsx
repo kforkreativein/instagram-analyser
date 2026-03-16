@@ -24,9 +24,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useToast } from "../../components/UI/Toast";
+import { useToast } from "@/app/components/UI/Toast";
 
-import { ClientTrackedVideo } from "../../../lib/types";
+import { ClientTrackedVideo } from "@/lib/types";
 
 type StyleDNA = {
   tone?: string;
@@ -107,18 +107,12 @@ export default function ClientProfileHub() {
       return;
     }
 
-    const apiKey = localStorage.getItem("geminiApiKey");
-    if (!apiKey) {
-      toast("error", "API Key Missing", "Gemini API key is required. Set it in Settings.");
-      return;
-    }
-
     setIsAnalyzing(true);
     try {
       const res = await fetch("/api/clients/analyze-style", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scripts: client.examples || client.winningScripts || [], apiKey }),
+        body: JSON.stringify({ scripts: client.examples || client.winningScripts || [] }),
       });
 
       if (res.ok) {
@@ -154,9 +148,7 @@ export default function ClientProfileHub() {
       return;
     }
 
-    const apifyApiKey = localStorage.getItem("APIFY_API_KEY") || localStorage.getItem("apifyApiKey") || "";
-    const geminiApiKey = localStorage.getItem("GEMINI_API_KEY") || localStorage.getItem("geminiApiKey") || "";
-
+    // API keys are fetched from the database by the backend
     // Let the backend handle missing key validation — skip frontend pre-check blockade
     
     setIsTrackLoading(true);
@@ -164,7 +156,7 @@ export default function ClientProfileHub() {
       const res = await fetch(`/api/clients/${id}/track-video`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoUrl: videoUrlInput, apifyApiKey, geminiApiKey }),
+        body: JSON.stringify({ videoUrl: videoUrlInput }),
       });
       
       if (res.ok) {
@@ -203,18 +195,14 @@ export default function ClientProfileHub() {
       return;
     }
 
-    const apifyApiKey = localStorage.getItem("APIFY_API_KEY") || localStorage.getItem("apifyApiKey") || "";
-    if (!apifyApiKey) {
-      toast("error", "Apify Key Missing", "Please set Apify API key in Settings to refresh stats.");
-      return;
-    }
+    // API key is managed on the backend
     
     setIsRefreshLoading(true);
     try {
       const res = await fetch(`/api/clients/${id}/refresh-metrics`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apifyApiKey }),
+        body: JSON.stringify({}),
       });
       
       if (res.ok) {

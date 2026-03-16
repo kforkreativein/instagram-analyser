@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { type ChangeEvent, useState, useEffect } from "react";
-import type { AnalyzeResponse, InstagramPost } from "../../lib/types";
+import type { AnalyzeResponse, InstagramPost } from "@/lib/types";
 import { Upload, X, FileVideo, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
-import { useToast } from "../components/UI/Toast";
-import { formatNumber, formatRelativeTime } from "../../lib/utils";
-import { ANALYSIS_CACHE_KEY } from "../../lib/client-settings";
+import { useToast } from "@/app/components/UI/Toast";
+import { formatNumber, formatRelativeTime } from "@/lib/utils";
+import { ANALYSIS_CACHE_KEY } from "@/lib/client-settings";
 
 type SavedVideoData = {
   savedAt: string;
@@ -19,6 +19,7 @@ type DbUpload = {
   fileName: string;
   analysis: AnalyzeResponse;
   transcript?: string;
+  thumbnail?: string | null;
   createdAt: string;
 };
 
@@ -101,37 +102,8 @@ export default function UploadsPage() {
       return val && val !== "undefined" && val !== "null" ? val.trim() : "";
     };
 
-    const provider = getStoredKey("activeProvider") || "Gemini";
-    const model = getStoredKey("activeModel") || "gemini-2.5-flash";
-
-    const transcriptionApiKey = getStoredKey("geminiApiKey");
-    if (!transcriptionApiKey) {
-      toast("error", "API Key Missing", "Gemini key missing. It is required for transcription.");
-      setIsAnalyzing(false);
-      setSelectedFile(null);
-      if (input) input.value = "";
-      return;
-    }
-
-    let analysisApiKey = "";
-    if (provider === "OpenAI") analysisApiKey = getStoredKey("openAiApiKey");
-    else if (provider === "Anthropic") analysisApiKey = getStoredKey("anthropicApiKey");
-    else analysisApiKey = transcriptionApiKey;
-
-    if (!analysisApiKey) {
-      toast("error", "API Key Missing", `${provider} key missing. Please add it in Settings.`);
-      setIsAnalyzing(false);
-      setSelectedFile(null);
-      if (input) input.value = "";
-      return;
-    }
-
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("provider", provider);
-    formData.append("model", model);
-    formData.append("analysisApiKey", analysisApiKey);
-    formData.append("transcriptionApiKey", transcriptionApiKey);
 
     try {
       const response = await fetch("/api/analyze-manual", {
@@ -390,12 +362,19 @@ export default function UploadsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {dbUploads.map((item) => (
                   <div key={item.id} className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.07] rounded-[16px] overflow-hidden hover:border-[rgba(255,59,87,0.35)] transition-all group">
-                    {/* Top: Video Placeholder */}
-                    <div className="relative w-full aspect-video bg-[#0d1117] flex items-center justify-center">
-                      <div className="flex flex-col items-center gap-2 text-white/20">
-                        <FileVideo size={32} strokeWidth={1} />
-                        <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-widest">Video File</span>
-                      </div>
+                    {/* Top: Video Thumbnail or Placeholder */}
+                    <div className="relative w-full aspect-video bg-[#0d1117] overflow-hidden">
+                      {item.thumbnail ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={item.thumbnail} alt={item.fileName} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#0d1117] via-[#111620] to-[#0d1117]">
+                          <div className="flex flex-col items-center gap-2 text-white/20">
+                            <FileVideo size={32} strokeWidth={1} />
+                            <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-widest">{item.fileName.replace(/\.[^.]+$/, "")}</span>
+                          </div>
+                        </div>
+                      )}
                       <span className="absolute top-3 right-3 px-[8px] py-[3px] rounded-full font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.05em] bg-[rgba(255,59,87,0.15)] text-[#FF3B57] border border-[rgba(255,59,87,0.25)]">
                         Analyzed
                       </span>

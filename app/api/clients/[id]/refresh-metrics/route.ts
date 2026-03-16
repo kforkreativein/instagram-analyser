@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import { ClientTrackedVideo } from "../../../../../lib/types";
 import { getSettings } from "../../../../../lib/db";
 
@@ -20,8 +23,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { apifyApiKey: bodyApifyKey } = await req.json();
     const clientId = params.id;
 
+    // Fetch user's Apify key from database
+    let apifyToken = bodyApifyKey;
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.email) {
+        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        if (user?.id) {
+          const userSettings = await prisma.settings.findUnique({ where: { userId: user.id } });
+          if (userSettings?.apifyApiKey) {
+            apifyToken = userSettings.apifyApiKey;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch user settings:", error);
+    }
+
+    // Fallback to getSettings
     const settings = getSettings();
-    const apifyToken = settings?.apifyApiKey || process.env.APIFY_API_TOKEN || bodyApifyKey;
+    if (!apifyToken) {
+      apifyToken = settings?.apifyApiKey;
+    }
 
     if (!apifyToken) {
       return NextResponse.json({ error: "API Keys Missing. Please save them in the Settings tab." }, { status: 400 });

@@ -1,6 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -22,6 +24,10 @@ async function writeScripts(scripts: any[]): Promise<void> {
 
 // POST: replace entire scripts array (legacy bulk save)
 export async function POST(request: NextRequest) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     try {
         const payload = (await request.json().catch(() => ({}))) as any;
         const scripts = Array.isArray(payload.scripts) ? payload.scripts : [];
@@ -37,6 +43,10 @@ export async function POST(request: NextRequest) {
 
 // PUT: upsert a single script by id
 export async function PUT(request: NextRequest) {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     try {
         const script = (await request.json().catch(() => null)) as any;
         if (!script || !script.id) {
@@ -49,7 +59,8 @@ export async function PUT(request: NextRequest) {
         if (existingIdx !== -1) {
             scripts[existingIdx] = { ...scripts[existingIdx], ...script, updatedAt: new Date().toISOString() };
         } else {
-            scripts.push({ ...script, createdAt: script.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
+            // Stamp userId on new scripts
+            scripts.push({ ...script, userId: session.user.id, createdAt: script.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() });
         }
 
         await writeScripts(scripts);

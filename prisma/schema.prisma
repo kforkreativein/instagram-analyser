@@ -31,10 +31,14 @@ model Settings {
   userId      String   @unique
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  geminiKey   String?
-  apifyKey    String?
-  openaiKey   String?
-  anthropicKey String?
+  geminiApiKey      String?
+  apifyApiKey       String?
+  openaiApiKey      String?
+  anthropicApiKey   String?
+  elevenlabsApiKey  String?
+  sarvamApiKey      String?
+  activeProvider    String?
+  activeModel       String?
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -79,6 +83,7 @@ model Upload {
   fileName  String
   analysis  Json?
   transcript String? @db.Text
+  thumbnail  String? @db.Text
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

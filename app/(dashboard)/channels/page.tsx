@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { useToast } from "../components/UI/Toast";
-import type { ScanProfileResponse } from "../api/scan-profile/route";
-import type { NamedWatchlist, WatchlistChannel } from "../../lib/types";
+import { useToast } from "@/app/components/UI/Toast";
+import type { ScanProfileResponse } from "@/app/api/scan-profile/route";
+import type { NamedWatchlist, WatchlistChannel } from "@/lib/types";
 
 // ── types ───────────────────────────────────────────────
 type Watchlist = { name: string; count: number; avatars: string[] };

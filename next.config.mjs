@@ -10,20 +10,6 @@ const nextConfig = {
       { protocol: "https", hostname: "**.apify.com" },
     ],
   },
-  async redirects() {
-    return [
-      {
-        source: "/video/:path*",
-        destination: "/videos/:path*",
-        permanent: true,
-      },
-      {
-        source: "/home",
-        destination: "/",
-        permanent: true,
-      },
-    ];
-  },
 };
 
 export default nextConfig;

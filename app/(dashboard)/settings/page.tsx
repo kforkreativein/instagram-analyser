@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { type AIProvider, LOCAL_SETTINGS_KEY, parseLocalSettings } from "../../lib/client-settings";
-import { useToast } from "../components/UI/Toast";
+import { type AIProvider, LOCAL_SETTINGS_KEY, parseLocalSettings } from "@/lib/client-settings";
+import { useToast } from "@/app/components/UI/Toast";
 import { Settings, User, Key, Globe, Layout, Briefcase, Eye, EyeOff } from "lucide-react";
 
 type ProviderOption = "openai" | "gemini" | "anthropic";
@@ -69,7 +69,6 @@ export default function SettingsPage() {
   const [ttsProvider, setTtsProvider] = useState<"ElevenLabs" | "Gemini" | "Sarvam AI" | "Google TTS">("ElevenLabs");
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState("");
   const [sarvamApiKey, setSarvamApiKey] = useState("");
-  const [storageEngine, setStorageEngine] = useState<"localstorage" | "json">("localstorage");
   const [notionApiKey, setNotionApiKey] = useState("");
   const [notionDatabaseId, setNotionDatabaseId] = useState("");
   const [agencyName, setAgencyName] = useState("");
@@ -78,37 +77,43 @@ export default function SettingsPage() {
   const toggleKey = (name: string) => setShowKeys(prev => ({ ...prev, [name]: !prev[name] }));
   const { toast } = useToast();
 
+  const [serverSavedKeys, setServerSavedKeys] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // Load UI preferences from localStorage (non-sensitive)
     const parsed = parseLocalSettings(localStorage.getItem(LOCAL_SETTINGS_KEY));
     const nextProvider = parseStoredProvider(localStorage.getItem(ACTIVE_PROVIDER_STORAGE_KEY)) || fromAiProvider(parsed.aiProvider);
     const storedModel = (localStorage.getItem(ACTIVE_MODEL_STORAGE_KEY) || "").trim();
     const nextModel = MODELS_BY_PROVIDER[nextProvider].includes(storedModel) ? storedModel : MODELS_BY_PROVIDER[nextProvider][0];
 
     setEmailAddress(localStorage.getItem(EMAIL_STORAGE_KEY) || "");
-    setApifyApiKey(localStorage.getItem("APIFY_API_KEY") || parsed.apifyApiKey || "");
-    setOpenaiApiKey(localStorage.getItem("OPENAI_API_KEY") || parsed.openaiApiKey || parsed.aiKeys.openai || "");
-    setGeminiApiKey(localStorage.getItem("GEMINI_API_KEY") || parsed.geminiApiKey || parsed.aiKeys.gemini || "");
-    setAnthropicApiKey(
-      localStorage.getItem("ANTHROPIC_API_KEY") || parsed.anthropicApiKey || parsed.aiKeys.claude || "",
-    );
     setActiveProvider(nextProvider);
     setActiveModel(nextModel);
     const storedTtsProvider = localStorage.getItem("ttsProvider") as "ElevenLabs" | "Gemini" | "Sarvam AI" | "Google TTS" | null;
-    if (storedTtsProvider) {
-      setTtsProvider(storedTtsProvider);
-    }
-    setElevenLabsApiKey(localStorage.getItem("elevenLabsApiKey") || "");
-    setSarvamApiKey(localStorage.getItem("sarvamApiKey") || "");
-    const storedEngine = localStorage.getItem("storageEngine");
-    if (storedEngine === "json" || storedEngine === "localstorage") {
-      setStorageEngine(storedEngine);
-    }
-    setNotionApiKey(localStorage.getItem("notionApiKey") || "");
-    setNotionDatabaseId(localStorage.getItem("notionDatabaseId") || "");
+    if (storedTtsProvider) setTtsProvider(storedTtsProvider);
     setAgencyName(localStorage.getItem("agencyName") || "");
     setAgencyLogoPreview(localStorage.getItem("agencyLogo") || "");
+
+    // Load API keys from server (per-user, isolated) and populate form fields
+    void fetch("/api/settings")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return;
+        if (data.geminiApiKey) { setGeminiApiKey(data.geminiApiKey); localStorage.setItem("GEMINI_API_KEY", data.geminiApiKey); localStorage.setItem("geminiApiKey", data.geminiApiKey); }
+        if (data.openaiApiKey) { setOpenaiApiKey(data.openaiApiKey); localStorage.setItem("OPENAI_API_KEY", data.openaiApiKey); localStorage.setItem("openAiApiKey", data.openaiApiKey); }
+        if (data.anthropicApiKey) { setAnthropicApiKey(data.anthropicApiKey); localStorage.setItem("ANTHROPIC_API_KEY", data.anthropicApiKey); localStorage.setItem("anthropicApiKey", data.anthropicApiKey); }
+        if (data.apifyApiKey) { setApifyApiKey(data.apifyApiKey); localStorage.setItem("APIFY_API_KEY", data.apifyApiKey); }
+        if (data.elevenlabsApiKey) { setElevenLabsApiKey(data.elevenlabsApiKey); localStorage.setItem("elevenLabsApiKey", data.elevenlabsApiKey); }
+        if (data.sarvamApiKey) { setSarvamApiKey(data.sarvamApiKey); localStorage.setItem("sarvamApiKey", data.sarvamApiKey); }
+        setServerSavedKeys({
+          geminiApiKey: !!data.geminiApiKey,
+          openaiApiKey: !!data.openaiApiKey,
+          anthropicApiKey: !!data.anthropicApiKey,
+          apifyApiKey: !!data.apifyApiKey,
+        });
+      });
   }, []);
 
   // Removed local toast timeout effect
@@ -126,25 +131,6 @@ export default function SettingsPage() {
     const nextGemini = geminiApiKey.trim();
     const nextAnthropic = anthropicApiKey.trim();
     const provider = toAiProvider(activeProvider);
-    const parsed = parseLocalSettings(localStorage.getItem(LOCAL_SETTINGS_KEY));
-
-    const nextSettings = {
-      ...parsed,
-      apifyApiKey: nextApify,
-      aiProvider: provider,
-      aiKeys: {
-        ...parsed.aiKeys,
-        openai: nextOpenAi,
-        gemini: nextGemini,
-        claude: nextAnthropic,
-      },
-      openaiApiKey: nextOpenAi,
-      geminiApiKey: nextGemini,
-      anthropicApiKey: nextAnthropic,
-      defaultAnalysisEngine: provider === "gemini" ? "gemini_1_5_pro" : "openai_gpt4o",
-      defaultCreativeEngine:
-        provider === "claude" ? "claude_3_5_sonnet" : provider === "gemini" ? "gemini_1_5_pro" : "gpt_4o",
-    };
 
     // Helper: strip out literal 'undefined' / 'null' strings before persisting
     const cleanKey = (val: string | null | undefined) =>
@@ -153,52 +139,50 @@ export default function SettingsPage() {
     const displayProvider =
       activeProvider === "openai" ? "OpenAI" : activeProvider === "anthropic" ? "Anthropic" : "Gemini";
 
-    // Camelcase keys — primary keys read by page.tsx and uploads/page.tsx
-    localStorage.setItem("geminiApiKey", cleanKey(nextGemini));
-    localStorage.setItem("openAiApiKey", cleanKey(nextOpenAi));
-    localStorage.setItem("anthropicApiKey", cleanKey(nextAnthropic));
-    localStorage.setItem("activeProvider", displayProvider);
-    localStorage.setItem("activeModel", activeModel || "gemini-3-flash-preview");
-
-    // Legacy SCREAMING_CASE keys — kept for backwards compatibility
+    // UI preferences only — non-sensitive, stored locally
     localStorage.setItem(EMAIL_STORAGE_KEY, nextEmail);
     localStorage.setItem(ACTIVE_PROVIDER_STORAGE_KEY, activeProvider);
     localStorage.setItem(ACTIVE_MODEL_STORAGE_KEY, activeModel);
-    localStorage.setItem("APIFY_API_KEY", cleanKey(nextApify));
-    localStorage.setItem("OPENAI_API_KEY", cleanKey(nextOpenAi));
-    localStorage.setItem("GEMINI_API_KEY", cleanKey(nextGemini));
-    localStorage.setItem("ANTHROPIC_API_KEY", cleanKey(nextAnthropic));
+    localStorage.setItem("activeProvider", displayProvider);
+    localStorage.setItem("activeModel", activeModel || "gemini-3-flash-preview");
     localStorage.setItem("analysisEngine", provider === "gemini" ? "gemini" : "openai");
-    localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(nextSettings));
-    // TTS settings
     localStorage.setItem("ttsProvider", ttsProvider);
-    localStorage.setItem("elevenLabsApiKey", cleanKey(elevenLabsApiKey.trim()));
-    localStorage.setItem("sarvamApiKey", cleanKey(sarvamApiKey.trim()));
-    // Storage engine
-    localStorage.setItem("storageEngine", storageEngine);
-    // Notion integration
-    localStorage.setItem("notionApiKey", cleanKey(notionApiKey.trim()));
-    localStorage.setItem("notionDatabaseId", cleanKey(notionDatabaseId.trim()));
-    // Agency Branding
     localStorage.setItem("agencyName", agencyName.trim());
 
-    toast("success", "Settings Saved", "Your configuration has been updated locally.");
-
-    // Also persist API keys to the server-side settings database
+    // Persist API keys to server-side database (per-user, isolated)
     void fetch("/api/settings", {
-      method: "POST",
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         geminiApiKey: cleanKey(nextGemini),
         openaiApiKey: cleanKey(nextOpenAi),
         anthropicApiKey: cleanKey(nextAnthropic),
         apifyApiKey: cleanKey(nextApify),
-        elevenLabsApiKey: cleanKey(elevenLabsApiKey.trim()),
+        elevenlabsApiKey: cleanKey(elevenLabsApiKey.trim()),
         sarvamApiKey: cleanKey(sarvamApiKey.trim()),
-        notionApiKey: cleanKey(notionApiKey.trim()),
-        notionDatabaseId: cleanKey(notionDatabaseId.trim()),
-        activeModel: activeModel || "gemini-3-flash-preview",
       }),
+    }).then((r) => {
+      if (r.ok) {
+        setServerSavedKeys({
+          geminiApiKey: !!cleanKey(nextGemini),
+          openaiApiKey: !!cleanKey(nextOpenAi),
+          anthropicApiKey: !!cleanKey(nextAnthropic),
+          apifyApiKey: !!cleanKey(nextApify),
+        });
+        // Also mirror to localStorage so other pages continue to work
+        localStorage.setItem("geminiApiKey", cleanKey(nextGemini));
+        localStorage.setItem("openAiApiKey", cleanKey(nextOpenAi));
+        localStorage.setItem("anthropicApiKey", cleanKey(nextAnthropic));
+        localStorage.setItem("GEMINI_API_KEY", cleanKey(nextGemini));
+        localStorage.setItem("OPENAI_API_KEY", cleanKey(nextOpenAi));
+        localStorage.setItem("ANTHROPIC_API_KEY", cleanKey(nextAnthropic));
+        localStorage.setItem("APIFY_API_KEY", cleanKey(nextApify));
+        localStorage.setItem("elevenLabsApiKey", cleanKey(elevenLabsApiKey.trim()));
+        localStorage.setItem("sarvamApiKey", cleanKey(sarvamApiKey.trim()));
+        toast("success", "Settings Saved", "Your configuration has been updated.");
+      } else {
+        toast("error", "Save Failed", "Could not save settings to server.");
+      }
     });
   }
 
@@ -231,7 +215,7 @@ export default function SettingsPage() {
             Settings
           </h1>
           <p className="font-['DM_Sans'] text-[14.5px] font-[300] text-[#8892A4] max-w-[560px] leading-[1.6]">
-            Manage your account, branding, and API keys locally on this device.
+            Manage your agency profile and encrypted API keys.
           </p>
         </header>
 
@@ -301,23 +285,6 @@ export default function SettingsPage() {
                   placeholder="you@agency.com"
                   className={premiumFieldClassName}
                 />
-              </div>
-              <div className="flex flex-col">
-                <label className="font-['JetBrains_Mono'] text-[10px] font-[500] text-[#5A6478] tracking-[0.07em] uppercase mb-[7px]">Storage Engine</label>
-                <div className="relative">
-                  <select
-                    value={storageEngine}
-                    onChange={(e) => setStorageEngine(e.target.value as "localstorage" | "json")}
-                    className={premiumSelectClassName}
-                  >
-                    <option value="localstorage">Browser (localStorage)</option>
-                    <option value="json">Hard Drive (database.json)</option>
-                  </select>
-                  <span className="absolute right-[14px] top-1/2 -translate-y-1/2 pointer-events-none text-[#5A6478]">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>
-                  </span>
-                </div>
-                <p className="font-['JetBrains_Mono'] text-[9px] text-[#5A6478] mt-[6px]">⚠ All data is stored locally on this device.</p>
               </div>
             </div>
           </div>

@@ -19,9 +19,9 @@ import {
 import Link from "next/link";
 import { Suspense, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { AnalyzeResponse, InstagramPost } from "../../../lib/types";
-import Skeleton from "../../components/UI/Skeleton";
-import { useToast } from "../../components/UI/Toast";
+import type { AnalyzeResponse, InstagramPost } from "@/lib/types";
+import Skeleton from "@/app/components/UI/Skeleton";
+import { useToast } from "@/app/components/UI/Toast";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { User, Users, Globe, Zap, CheckCircle2 } from "lucide-react";
 
@@ -646,44 +646,31 @@ function ScriptsPageContent() {
   const [originalAnalysis, setOriginalAnalysis] = useState(null);
 
   useEffect(() => {
+    // Check for explicit ?title= URL param (works for any entry point)
+    const urlTitle = searchParams.get("title");
+    if (urlTitle) {
+      setScriptTitle(decodeURIComponent(urlTitle));
+    }
+
     if (searchParams.get("mode") === "remix") {
       setCreationMode("remix");
       
       const savedPayload = sessionStorage.getItem("pendingRemix");
       if (savedPayload) {
         try {
-          const { transcript, analysis } = JSON.parse(savedPayload);
+          const { transcript, analysis, suggestedName } = JSON.parse(savedPayload);
           if (transcript) setRemixTranscript(transcript);
           if (analysis) setOriginalAnalysis(analysis);
 
-          // AI-generated title from transcript
-          const transcriptSnippet = (transcript || "").slice(0, 300);
-          const fallbackTitle = transcriptSnippet.split(" ").slice(0, 4).join(" ") + "... Remix";
-
-          if (transcriptSnippet) {
-            const geminiApiKey = localStorage.getItem("geminiApiKey") || localStorage.getItem("GEMINI_API_KEY") || "";
-            if (geminiApiKey) {
-              fetch("/api/generate-text", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  prompt: `You are a YouTube producer. Read the following transcript snippet and generate a punchy, 3-to-4 word title for this video script. Output ONLY the title itself. Do not include quotation marks, prefixes, or any other conversational text. Snippet: ${transcriptSnippet}`,
-                  provider: "Gemini",
-                  apiKey: geminiApiKey,
-                  model: "gemini-3-flash-preview",
-                }),
-              })
-                .then((r) => r.json())
-                .then((data: { text?: string }) => {
-                  const generatedTitle = data.text?.trim().replace(/^["']|["']$/g, "");
-                  setScriptTitle(generatedTitle || fallbackTitle);
-                })
-                .catch(() => setScriptTitle(fallbackTitle));
-            } else {
-              setScriptTitle(fallbackTitle);
-            }
-          } else {
-            setScriptTitle("New Remix Script");
+          // Priority: suggestedName > URL title param > transcript fallback
+          if (suggestedName) {
+            setScriptTitle(suggestedName);
+          } else if (!urlTitle) {
+            const transcriptSnippet = (transcript || "").slice(0, 300);
+            const fallbackTitle = transcriptSnippet
+              ? transcriptSnippet.split(" ").slice(0, 5).join(" ") + "... Remix"
+              : "New Remix Script";
+            setScriptTitle(fallbackTitle);
           }
         } catch(e) {}
         
@@ -1278,17 +1265,11 @@ function ScriptsPageContent() {
     setAiEditError("");
 
     try {
-      const openaiApiKey = localStorage.getItem("OPENAI_API_KEY") || "";
-      const geminiApiKey = localStorage.getItem("GEMINI_API_KEY") || "";
-      const anthropicApiKey = localStorage.getItem("ANTHROPIC_API_KEY") || "";
-
+      // API keys are managed on the backend
       const response = await fetch("/api/edit-text", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(openaiApiKey ? { "x-openai-key": openaiApiKey } : {}),
-          ...(geminiApiKey ? { "x-gemini-key": geminiApiKey } : {}),
-          ...(anthropicApiKey ? { "x-anthropic-key": anthropicApiKey } : {}),
         },
         body: JSON.stringify({
           selectedText: selection.text,
@@ -1508,20 +1489,12 @@ function ScriptsPageContent() {
           return;
         }
 
-        const geminiApiKey = localStorage.getItem("geminiApiKey");
-        if (!geminiApiKey && !settingsHasKeys) {
-          toast("error", "API Key Missing", "Please add your Gemini API key in Settings.");
-          setIsGeneratingScript(false);
-          return;
-        }
-
         const payload = {
           tweakAttribute: tweakAttribute,
           onePercentFocus: onePercentFocus,
           transcript: remixTranscript,
           analysis: originalAnalysis || {},
           selectedModel: activeModel,
-          geminiApiKey: geminiApiKey,
           clientProfile: selectedClient || undefined
         };
 
@@ -1637,9 +1610,6 @@ function ScriptsPageContent() {
           videoLength,
           language: activeLanguage,
           clientProfile: selectedClient,
-          openaiApiKey: localStorage.getItem('openAiApiKey'),
-          geminiApiKey: localStorage.getItem('geminiApiKey'),
-          anthropicApiKey: localStorage.getItem('anthropicApiKey')
         }),
       });
 
@@ -1778,7 +1748,6 @@ function ScriptsPageContent() {
     if (!script.trim() || activeAction) return;
 
     setActiveAction(action);
-    const geminiApiKey = localStorage.getItem("geminiApiKey");
 
     try {
       const response = await fetch("/api/script-actions", {
@@ -1787,7 +1756,6 @@ function ScriptsPageContent() {
         body: JSON.stringify({
           script,
           action,
-          geminiApiKey,
           pacingAnalysis: (action === 'improve' || action === 'shorten') ? pacingData : undefined,
           videoLength,
           clientProfile: selectedClient || undefined,
@@ -1858,12 +1826,11 @@ function ScriptsPageContent() {
 
   async function applyImprovement(suggestionObj: { title: string; suggestion: string; impact: string }) {
     setActiveAction('improving');
-    const geminiApiKey = localStorage.getItem("geminiApiKey");
     try {
       const res = await fetch('/api/apply-improvement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script, instruction: suggestionObj.suggestion, geminiApiKey }),
+        body: JSON.stringify({ script, instruction: suggestionObj.suggestion }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Apply failed");
@@ -2470,12 +2437,6 @@ ${text}`;
     const text = script.trim();
     if (!text || isGeneratingCaption) return;
 
-    const apiKey = localStorage.getItem("geminiApiKey") || "";
-    if (!apiKey && !settingsHasKeys) {
-      toast("error", "API Key Missing", "Gemini API key is required. Please add it in Settings.");
-      return;
-    }
-
     setIsGeneratingCaption(true);
     setGeneratedCaption(null);
 
@@ -2483,7 +2444,7 @@ ${text}`;
       const response = await fetch("/api/generate-caption", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scriptBody: text, apiKey }),
+        body: JSON.stringify({ scriptBody: text }),
       });
 
       if (!response.ok) {
@@ -3445,17 +3406,15 @@ LANGUAGE: ${activeLanguage}`;
                 {activeAction === 'improve' ? '⏳ Processing...' : pacingData ? '✦ Fix Pacing Issues' : '✦ Improve Script'}
               </button>
               <button onClick={() => {
-                const geminiApiKey = localStorage.getItem("geminiApiKey");
                 setActiveAction('improve');
-                fetch("/api/script-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, action: 'improve', geminiApiKey, focusArea: 'hook', videoLength }) })
+                fetch("/api/script-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, action: 'improve', focusArea: 'hook', videoLength }) })
                   .then(r => r.json()).then(d => { setScript(d.result); setImprovementLog(p => ["Hook rewritten", ...p]); toast("success", "Hook Improved", ""); }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
               }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-sky-500/30 text-sky-400 bg-sky-500/5 hover:bg-sky-500/15 hover:border-sky-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
                 {activeAction === 'improve' ? '⏳' : '🎣 Sharpen Hook'}
               </button>
               <button onClick={() => {
-                const geminiApiKey = localStorage.getItem("geminiApiKey");
                 setActiveAction('improve');
-                fetch("/api/script-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, action: 'improve', geminiApiKey, focusArea: 'structure', videoLength }) })
+                fetch("/api/script-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, action: 'improve', focusArea: 'structure', videoLength }) })
                   .then(r => r.json()).then(d => { setScript(d.result); setImprovementLog(p => ["Story structure improved", ...p]); toast("success", "Structure Improved", ""); }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
               }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-orange-500/30 text-orange-400 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
                 {activeAction === 'improve' ? '⏳' : '🏗 Fix Structure'}

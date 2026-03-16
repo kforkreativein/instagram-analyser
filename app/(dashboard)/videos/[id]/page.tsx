@@ -10,11 +10,11 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import {
   ANALYSIS_CACHE_KEY,
   POSTS_CACHE_KEY,
-} from "../../../lib/client-settings";
-import type { AnalyzeResponse, InstagramPost } from "../../../lib/types";
-import { calculateOutlierScore, formatNumber, formatRelativeTime } from "../../../lib/utils";
-import Skeleton from "../../components/UI/Skeleton";
-import { useToast } from "../../components/UI/Toast";
+} from "@/lib/client-settings";
+import type { AnalyzeResponse, InstagramPost } from "@/lib/types";
+import { calculateOutlierScore, formatNumber, formatRelativeTime } from "@/lib/utils";
+import Skeleton from "@/app/components/UI/Skeleton";
+import { useToast } from "@/app/components/UI/Toast";
 
 type SavedVideoData = {
   savedAt?: string;
@@ -234,11 +234,14 @@ export default function VideoAnalysisPage() {
 
 
   const handleRemixJump = () => {
+    const suggestedName = post?.caption
+      ? post.caption.trim().split(/\s+/).slice(0, 5).join(" ") + " Remix"
+      : "Video Remix";
     const remixPayload = {
       transcript: transcript || post?.caption || "",
       analysis: analysis?.analysis || {},
       originalId: id,
-      suggestedName: "", // Will be AI-generated in the editor
+      suggestedName,
     };
 
     sessionStorage.setItem("pendingRemix", JSON.stringify(remixPayload));

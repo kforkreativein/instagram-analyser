@@ -4,8 +4,8 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { WatchlistChannel } from "../../../lib/types";
-import type { FetchedProfile } from "../../api/profiles/fetch/route";
+import type { WatchlistChannel } from "@/lib/types";
+import type { FetchedProfile } from "@/app/api/profiles/fetch/route";
 
 function parseManualInput(inputString: string): string[] {
   const reservedRoutes = new Set([

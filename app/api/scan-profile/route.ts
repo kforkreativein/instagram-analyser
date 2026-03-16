@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import { getSettings } from "../../../lib/db";
 
 export const maxDuration = 60;
@@ -159,7 +162,29 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "username is required" }, { status: 400 });
         }
 
-        const apifyApiKey = (body.apifyApiKey || "").trim() || getSettings().apifyApiKey;
+        // Fetch user's Apify API key from database
+        let apifyApiKey = (body.apifyApiKey || "").trim(); // fallback to body if provided
+        try {
+          const session = await getServerSession(authOptions);
+          if (session?.user?.email) {
+            const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+            if (user?.id) {
+              const userSettings = await prisma.settings.findUnique({ where: { userId: user.id } });
+              if (userSettings?.apifyApiKey) {
+                apifyApiKey = userSettings.apifyApiKey;
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Failed to fetch user settings:", error);
+          // Continue with body.apifyApiKey or environment fallback
+        }
+        
+        // Fallback to environment variable if user hasn't set it
+        if (!apifyApiKey) {
+          apifyApiKey = getSettings().apifyApiKey;
+        }
+        
         if (!apifyApiKey) {
             return NextResponse.json({ error: "API Key not found in Settings. Please go to Settings to add it." }, { status: 401 });
         }

@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import { getSettings } from "../../../../lib/db";
 
 export const runtime = "nodejs";
@@ -81,7 +84,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "At least one username is required." }, { status: 400 });
     }
 
-    const apifyToken = (body.apifyApiKey ?? "").trim() || getSettings().apifyApiKey || process.env.APIFY_API_TOKEN;
+    // Fetch user's Apify key from database
+    let apifyToken = (body.apifyApiKey ?? "").trim();
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.email) {
+        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        if (user?.id) {
+          const userSettings = await prisma.settings.findUnique({ where: { userId: user.id } });
+          if (userSettings?.apifyApiKey) {
+            apifyToken = userSettings.apifyApiKey;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch user settings:", error);
+    }
+
+    // Fallback to getSettings
+    if (!apifyToken) {
+      apifyToken = getSettings().apifyApiKey;
+    }
+
     if (!apifyToken) {
       return NextResponse.json(
         { error: "Apify API key not found. Add it in Settings." },

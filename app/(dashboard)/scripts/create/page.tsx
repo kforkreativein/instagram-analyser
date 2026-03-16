@@ -10,8 +10,8 @@ import {
   type CreativeEngine,
   type LocalSettings,
   parseLocalSettings,
-} from "../../../lib/client-settings";
-import CanvasEditor from "../../components/CanvasEditor";
+} from "@/lib/client-settings";
+import CanvasEditor from "@/app/components/CanvasEditor";
 
 type WizardStep = 1 | 2 | 3 | 4;
 

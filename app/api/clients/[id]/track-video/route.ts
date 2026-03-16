@@ -3,7 +3,9 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { getSettings } from "../../../../../lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 
 const DB_PATH = path.join(process.cwd(), "database.json");
 
@@ -29,9 +31,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { videoUrl, apifyApiKey: bodyApifyKey, geminiApiKey: bodyGeminiKey } = await req.json();
     const clientId = params.id;
 
-    const settings = getSettings();
-    const apifyToken = settings?.apifyApiKey || (settings as any)?.apifyToken || process.env.APIFY_API_TOKEN || bodyApifyKey;
-    const geminiKey = settings?.geminiApiKey || process.env.GEMINI_API_KEY || bodyGeminiKey;
+    // Fetch user's API keys from database
+    let apifyToken = bodyApifyKey;
+    let geminiKey = bodyGeminiKey;
+    try {
+      const session = await getServerSession(authOptions);
+      if (session?.user?.email) {
+        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+        if (user?.id) {
+          const userSettings = await prisma.settings.findUnique({ where: { userId: user.id } });
+          if (userSettings?.apifyApiKey) {
+            apifyToken = userSettings.apifyApiKey;
+          }
+          if (userSettings?.geminiApiKey) {
+            geminiKey = userSettings.geminiApiKey;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch user settings:", error);
+    }
 
     if (!videoUrl) {
       return NextResponse.json({ error: "Missing required field: videoUrl" }, { status: 400 });
@@ -128,7 +147,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // 2. Deep Analysis with Gemini
-    const selectedModel = settings?.activeModel || "gemini-3-flash-preview";
+    const selectedModel = "gemini-2.5-flash";
     console.log(`[Track-Video] Generating Deep Analysis with model: ${selectedModel}`);
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: selectedModel });

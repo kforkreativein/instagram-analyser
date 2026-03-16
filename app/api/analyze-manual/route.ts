@@ -2,9 +2,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
+import os from "os";
 import fs from "fs";
 import path from "path";
 import type { AIAnalysis, AnalyzeResponse, DeepAnalysis } from "../../../lib/types";
+
+if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -14,6 +22,31 @@ const TRANSCRIPTION_PROMPT =
   "You are an expert transcriber. Watch this video and transcribe the exact spoken words. You MUST return the output strictly in standard .SRT format with sequential numbers, timestamps (00:00:00,000 --> 00:00:00,000), and the text on a third line per block. Example:\n1\n00:00:00,000 --> 00:00:03,500\nHello, welcome to this video.\n\n2\n00:00:03,500 --> 00:00:07,000\nToday we are covering an important topic.";
 const TRANSCRIPTION_MODEL = "gemini-2.5-flash";
 const MAX_TRANSCRIPT_CHARS = 12000;
+
+/** Extract first frame of a video buffer as a base64 JPEG thumbnail */
+async function extractThumbnail(videoBuffer: Buffer, mimeType: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    try {
+      const ext = mimeType === "video/mp4" ? ".mp4" : mimeType === "video/webm" ? ".webm" : mimeType === "video/quicktime" ? ".mov" : ".mp4";
+      const tmpIn = path.join(os.tmpdir(), `thumb-in-${Date.now()}${ext}`);
+      const tmpOut = path.join(os.tmpdir(), `thumb-out-${Date.now()}.jpg`);
+      fs.writeFileSync(tmpIn, videoBuffer);
+
+      ffmpeg(tmpIn)
+        .screenshots({ timestamps: ["00:00:00.001"], filename: path.basename(tmpOut), folder: path.dirname(tmpOut), size: "480x?" })
+        .on("end", () => {
+          try {
+            const data = fs.readFileSync(tmpOut);
+            const b64 = `data:image/jpeg;base64,${data.toString("base64")}`;
+            fs.unlinkSync(tmpIn);
+            fs.unlinkSync(tmpOut);
+            resolve(b64);
+          } catch { resolve(null); }
+        })
+        .on("error", () => { try { fs.unlinkSync(tmpIn); } catch { } resolve(null); });
+    } catch { resolve(null); }
+  });
+}
 
 /** Strip SRT timestamps/numbers to get plain spoken text for LLM analysis */
 function srtToPlainText(srt: string): string {
@@ -228,64 +261,39 @@ function extractAnthropicText(response: unknown): string {
 }
 
 function buildUniversalSystemPrompt(transcriptText: string): string {
-  return (
-    `You are an elite viral content strategist and behavioral psychologist. Analyze this transcript and return a STRICT JSON object with EXACTLY this structure and nothing else. Do not add extra keys, markdown fences, or commentary.
+  return `You are an elite viral content strategist and behavioral psychologist. Analyze this transcript and return ONLY a valid JSON object. Do not include markdown code blocks, backticks, or any commentary outside the JSON.
 
-` +
-    `{
-` +
-    `  "narrative": {
-` +
-    `    "topic": "The broad subject matter.",
-` +
-    `    "seed": "A 1-line sentence about what makes this specific video interesting.",
-` +
-    `    "substance": "The core facts, examples, or main takeaway.",
-` +
-    `    "format": "The underlying story structure (e.g., Problem/Solution, Listicle, Before/After)."
-` +
-    `  },
-` +
-    `  "hooks": {
-` +
-    `    "spokenHook": "The exact first words spoken in the video.",
-` +
-    `    "visualHook": "What grabs the eye in the first 3 seconds.",
-` +
-    `    "textHook": "The on-screen text used to stop the scroll."
-` +
-    `  },
-` +
-    `
-` +
-    `STRICT INSTRUCTION FOR HOOKS:
-` +
-    `You will be provided with a text transcript of a short-form video. Audio transcripts inherently lack visual descriptions.
-` +
-    `UNDER NO CIRCUMSTANCES are you allowed to output "Not specified in transcript", "N/A", "Not available", or any similar placeholder for the visualHook or textHook fields.
-` +
-    `Instead, you MUST use your expertise as a viral video strategist to INFER and RECONSTRUCT the most highly probable visualHook (actions, B-roll footage, camera movement) and textHook (on-screen pop-up text) that would perfectly accompany the spoken words to maximize viewer retention. Base your inference on the topic, tone, and spoken hook of the transcript.
+The JSON must exactly match this structure:
+{
+  "narrative": {
+    "topic": "The broad subject matter.",
+    "seed": "A 1-line sentence about what makes this specific video interesting.",
+    "substance": "The core facts, examples, or main takeaway.",
+    "storyStructure": "MUST BE EXACTLY ONE OF: Problem/Solution, Contrarian, Listicle, Story/Vlog, Step-by-Step"
+  },
+  "hooks": {
+    "spokenHook": "The exact first words spoken in the video.",
+    "visualHook": "What grabs the eye in the first 3 seconds.",
+    "textHook": "The on-screen text used to stop the scroll.",
+    "hookType": "MUST BE EXACTLY ONE OF: Negative Hook, Curiosity Hook, Value Hook, Story Hook, Visual Hook, Question Hook, Direct Hook, Empathy Hook, Statistic Hook"
+  },
+  "architecture": {
+    "visualLayout": "How the screen is arranged (e.g., split-screen, green screen, dynamic zoom, talking head).",
+    "visualElements": "Specific video and audio elements used (e.g., sound effects, pop-up text, B-roll, captions).",
+    "keyVisuals": "The 2-3 most memorable visual moments or shots in the video.",
+    "audioVibe": "The overall audio atmosphere (e.g., upbeat, tense, calm, dramatic)."
+  },
+  "conversion": {
+    "cta": "The exact Call to Action at the end of the video."
+  }
+}
 
-` +
-    `  "architecture": {
-` +
-    `    "visualLayout": "How the screen is arranged (e.g., split-screen, green screen, dynamic zoom, talking head).",
-` +
-    `    "visualElements": "Specific video and audio elements used (e.g., sound effects, pop-up text, B-roll, captions)."
-` +
-    `  },
-` +
-    `  "conversion": {
-` +
-    `    "cta": "The exact Call to Action at the end of the video."
-` +
-    `  }
-` +
-    `}
+STRICT INSTRUCTION FOR HOOKS:
+You will be provided with a text transcript of a short-form video. Audio transcripts inherently lack visual descriptions.
+UNDER NO CIRCUMSTANCES are you allowed to output "Not specified in transcript", "N/A", "Not available", or any similar placeholder for any field.
+Instead, you MUST use your expertise as a viral video strategist to INFER and RECONSTRUCT the most highly probable values based on the topic, tone, and spoken content. Every field must be populated.
 
-` +
-    `Transcript:\n` + transcriptText
-  );
+Transcript:\n${transcriptText}`;
 }
 
 function normalizeUniversalAnalysisShape(payload: UnknownRecord, transcriptText: string): UnknownRecord {
@@ -325,7 +333,7 @@ function normalizeUniversalAnalysisShape(payload: UnknownRecord, transcriptText:
         cta: toStringSafe(conversion.cta, ""),
         targetAudienceAndTone: toStringSafe(narrative.topic, ""),
         problemAndSolution: transcriptText,
-        audioAndAtmosphere: toStringSafe(architecture.visualElements, ""),
+        audioAndAtmosphere: toStringSafe(architecture.audioVibe, toStringSafe(architecture.visualElements, "")),
         keyTakeaways: [toStringSafe(narrative.seed, ""), toStringSafe(narrative.substance, "")].filter(Boolean),
       },
     };
@@ -399,7 +407,7 @@ function extractDeepAnalysis(payload: UnknownRecord): DeepAnalysis | null {
       visualLayout: toStringSafe(architecture.visualLayout, "Not analyzed"),
       visualElements: toStringSafe(architecture.visualElements, "Not analyzed"),
       keyVisuals: toStringSafe(architecture.keyVisuals, "Not analyzed"),
-      audio: toStringSafe(architecture.audio, "Not analyzed"),
+      audio: toStringSafe(architecture.audioVibe, toStringSafe(architecture.audio, "Not analyzed")),
     },
     conversion: {
       cta: toStringSafe(conversion.cta, "Not analyzed"),
@@ -494,18 +502,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const provider = normalizeProvider(toStringSafe(formData.get("provider"), "Gemini"));
+    // Fetch user's API keys from database
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const dbUser = await prisma.user.findUnique({ where: { email: session.user.email } });
+    if (!dbUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    const userSettings = await prisma.settings.findUnique({ where: { userId: dbUser.id } });
+
+    const activeProvider = userSettings?.activeProvider ?? "Gemini";
+    const provider = normalizeProvider(activeProvider);
     const model =
-      toStringSafe(formData.get("model")).trim() ||
+      userSettings?.activeModel?.trim() ||
       (provider === "OpenAI" ? "gpt-4o" : provider === "Anthropic" ? "claude-3-5-sonnet-20241022" : "gemini-2.5-flash");
-    const analysisApiKey = toStringSafe(formData.get("analysisApiKey") || formData.get("apiKey"), "").trim();
-    const transcriptionApiKey = toStringSafe(formData.get("transcriptionApiKey"), "").trim();
+
+    let analysisApiKey = "";
+    if (provider === "OpenAI") analysisApiKey = userSettings?.openaiApiKey ?? "";
+    else if (provider === "Anthropic") analysisApiKey = userSettings?.anthropicApiKey ?? "";
+    else analysisApiKey = userSettings?.geminiApiKey ?? "";
+
+    const transcriptionApiKey = userSettings?.geminiApiKey ?? "";
 
     if (!analysisApiKey) {
-      return NextResponse.json({ error: "Analysis API key missing" }, { status: 401 });
+      return NextResponse.json(
+        { error: `Missing API key for ${activeProvider}. Please add it in your Settings.` },
+        { status: 400 },
+      );
     }
     if (!transcriptionApiKey) {
-      return NextResponse.json({ error: "Gemini API key is required for transcription" }, { status: 401 });
+      return NextResponse.json({ error: "Gemini API key is required for transcription. Please add it in your Settings." }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -547,23 +575,25 @@ export async function POST(req: NextRequest) {
       analysis.deepAnalysis = deepAnalysis;
     }
 
-    const uploadId = `manual-${Date.now()}`;
-    const uploadRecord = {
-      id: uploadId,
-      fileName: file.name,
-      analysis,
-      transcript: transcriptForModel,
-      createdAt: new Date().toISOString(),
-    };
+    let uploadId = `manual-${Date.now()}`;
 
+    // Extract first-frame thumbnail (best-effort — non-fatal if ffmpeg fails)
+    const thumbnail = await extractThumbnail(buffer, mimeType).catch(() => null);
+
+    // Save to Prisma Upload table (user-isolated)
     try {
-      const dbPath = path.join(process.cwd(), "database.json");
-      const raw = fs.readFileSync(dbPath, "utf8");
-      const db = JSON.parse(raw) as Record<string, unknown>;
-      const existing = Array.isArray(db.localUploads) ? db.localUploads as unknown[] : [];
-      db.localUploads = [uploadRecord, ...existing];
-      fs.writeFileSync(dbPath, JSON.stringify(db, null, 2));
-    } catch {
+      const prismaRecord = await prisma.upload.create({
+        data: {
+          userId: dbUser.id,
+          fileName: file.name,
+          analysis: analysis as any,
+          transcript: transcriptForModel,
+          ...(thumbnail ? { thumbnail } : {}),
+        },
+      });
+      uploadId = prismaRecord.id;
+    } catch (dbErr) {
+      console.error("Failed to save upload to DB:", dbErr);
       // Non-fatal — client localStorage still stores the data
     }
 

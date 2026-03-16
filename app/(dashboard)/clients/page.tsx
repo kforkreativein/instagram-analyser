@@ -13,7 +13,7 @@ import {
   MessageSquare
 } from "lucide-react";
 import Link from "next/link";
-import { useToast } from "../components/UI/Toast";
+import { useToast } from "@/app/components/UI/Toast";
 
 type StyleDNA = {
   tone?: string;

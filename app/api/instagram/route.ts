@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import { calculateOutlierScore } from "../../../lib/utils";
 import { getSettings } from "../../../lib/db";
+import prisma from "../../../lib/prisma";
+import { authOptions } from "@/lib/auth";
 import {
   DATE_RANGE_TO_MONTHS,
   METRIC_KEYS,
@@ -472,13 +475,9 @@ class ApifyHttpError extends Error {
 async function fetchFromApify(
   username: string,
   dateRange: DateRangeOption,
-  apifyApiKey?: string,
+  apifyApiKey: string,
   resultsType: ResultsType = "posts",
 ): Promise<DataSourceResult> {
-  if (!apifyApiKey) {
-    throw new Error("Missing Apify API key. Add it from Settings before running analysis.");
-  }
-
   const startDate = dateRangeCutoff(dateRange);
   const startIso = startDate.toISOString();
   const controller = new AbortController();
@@ -586,12 +585,31 @@ async function handleRequest(
   }
 
   const dateRange = normalizeDateRange(dateRangeInput);
-  const apifyApiKey = typeof apifyApiKeyInput === "string" ? apifyApiKeyInput.trim() : "";
   const resultsType: ResultsType = resultsTypeInput === "reels" ? "reels" : "posts";
+
+  // Fetch the API key from the database using the current user's session
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+  if (!user) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  const settings = await prisma.settings.findUnique({ where: { userId: user.id } });
+  if (!settings?.apifyApiKey) {
+    return NextResponse.json(
+      { error: "Apify API key missing. Please add it in your Settings." },
+      { status: 400 },
+    );
+  }
+
   const sourcePayload = await fetchFromApify(
     username,
     dateRange,
-    apifyApiKey || getSettings().apifyApiKey,
+    settings.apifyApiKey,
     resultsType,
   );
 

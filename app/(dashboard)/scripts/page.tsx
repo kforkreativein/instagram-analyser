@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Search, FileEdit, Plus, Trash2 } from "lucide-react";
-import EmptyState from "../components/UI/EmptyState";
+import EmptyState from "@/app/components/UI/EmptyState";
 import { useState, useEffect } from "react";
 
 export default function ScriptsDashboardPage() {

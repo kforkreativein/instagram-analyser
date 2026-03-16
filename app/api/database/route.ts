@@ -1,6 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
@@ -52,8 +54,18 @@ async function readDatabase(): Promise<AppDatabase> {
 }
 
 export async function GET() {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+        return NextResponse.json({ data: [] }, { status: 401 });
+    }
     const database = await readDatabase();
-    return NextResponse.json({ data: database.history });
+    // Filter out manual uploads from history — those belong in /uploads
+    const scraped = database.history.filter((entry: unknown) => {
+        const record = entry as Record<string, unknown>;
+        const post = record.post as Record<string, unknown> | undefined;
+        return post?.username !== "manual_upload";
+    });
+    return NextResponse.json({ data: scraped });
 }
 
 export async function POST(request: NextRequest) {

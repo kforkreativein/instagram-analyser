@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import {
   Clapperboard,
   Home,
+  LogOut,
   Settings,
   Tv,
   Upload,
@@ -13,11 +14,12 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 
 const navItems = [
   {
     section: "Analyze", items: [
-      { label: "Home", path: "/", icon: Home },
+      { label: "Home", path: "/home", icon: Home },
       { label: "Channels", path: "/channels", icon: Tv },
       { label: "Videos", path: "/videos", icon: Video },
       { label: "Uploads", path: "/uploads", icon: Upload },
@@ -119,6 +121,13 @@ export default function AppSidebar() {
           <span className="text-[11.5px] font-['DM_Sans'] text-[#8892A4] truncate">
             {agencyName}
           </span>
+          <button
+            onClick={() => signOut({ callbackUrl: '/signin' })}
+            title="Logout"
+            className="ml-auto shrink-0 text-[#5A6478] hover:text-[#FF3B57] transition-colors"
+          >
+            <LogOut className="w-[14px] h-[14px]" />
+          </button>
         </div>
       </div>
     </aside>

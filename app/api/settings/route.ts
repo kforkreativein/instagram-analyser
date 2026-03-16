@@ -22,19 +22,17 @@ export async function GET(request: NextRequest) {
     });
 
     if (!settings) {
-      return NextResponse.json(
-        { error: "Settings not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({});
     }
 
-    // Mask keys for the response — only reveal if they are set
+    // Return actual key values so the frontend can populate form fields
     return NextResponse.json({
-      geminiKey: settings.geminiKey ? "***set***" : "",
-      openaiKey: settings.openaiKey ? "***set***" : "",
-      anthropicKey: settings.anthropicKey ? "***set***" : "",
-      apifyKey: settings.apifyKey ? "***set***" : "",
-      hasKeys: !!(settings.geminiKey || settings.openaiKey || settings.anthropicKey),
+      geminiApiKey: settings.geminiApiKey ?? "",
+      openaiApiKey: settings.openaiApiKey ?? "",
+      anthropicApiKey: settings.anthropicApiKey ?? "",
+      apifyApiKey: settings.apifyApiKey ?? "",
+      elevenlabsApiKey: settings.elevenlabsApiKey ?? "",
+      sarvamApiKey: settings.sarvamApiKey ?? "",
     });
   } catch (error) {
     return NextResponse.json(
@@ -56,7 +54,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json() as Record<string, unknown>;
-    const allowed = ["geminiKey", "openaiKey", "anthropicKey", "apifyKey"];
+    const allowed = ["geminiApiKey", "openaiApiKey", "anthropicApiKey", "apifyApiKey", "elevenlabsApiKey", "sarvamApiKey"];
     const update: Record<string, string | null> = {};
 
     for (const key of allowed) {
@@ -67,9 +65,10 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const settings = await prisma.settings.update({
+    const settings = await prisma.settings.upsert({
       where: { userId: session.user.id },
-      data: update,
+      update: update,
+      create: { userId: session.user.id, ...update },
     });
 
     return NextResponse.json({ success: true, settings });

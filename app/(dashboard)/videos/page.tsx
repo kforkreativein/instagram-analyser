@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
-import type { AnalyzeResponse, InstagramPost } from "../../lib/types";
-import { ANALYSIS_CACHE_KEY, POSTS_CACHE_KEY } from "../../lib/client-settings";
-import { calculateOutlierScore, formatNumber, formatRelativeTime, getFirstValidOutlierScore } from "../../lib/utils";
-import Skeleton from "../components/UI/Skeleton";
-import EmptyState from "../components/UI/EmptyState";
-import { useToast } from "../components/UI/Toast";
+import type { AnalyzeResponse, InstagramPost } from "@/lib/types";
+import { ANALYSIS_CACHE_KEY, POSTS_CACHE_KEY } from "@/lib/client-settings";
+import { calculateOutlierScore, formatNumber, formatRelativeTime, getFirstValidOutlierScore } from "@/lib/utils";
+import Skeleton from "@/app/components/UI/Skeleton";
+import EmptyState from "@/app/components/UI/EmptyState";
+import { useToast } from "@/app/components/UI/Toast";
 import { Database, Search, Filter, ArrowUpDown } from "lucide-react";
 
 type SavedVideoData = {
@@ -36,7 +36,11 @@ export default function VideosPage() {
         if (res.ok) {
           const json = (await res.json()) as { data?: unknown };
           if (Array.isArray(json.data) && json.data.length > 0) {
-            setSavedVideos(json.data as SavedVideoData[]);
+            // Filter out manual uploads — only show scraped Instagram/social videos
+            const scraped = (json.data as SavedVideoData[]).filter(
+              v => v?.post?.username !== "manual_upload"
+            );
+            setSavedVideos(scraped);
             return;
           }
         }
@@ -45,7 +49,10 @@ export default function VideosPage() {
       try {
         const raw = localStorage.getItem(ANALYZED_HISTORY_KEY);
         const parsed = raw ? (JSON.parse(raw) as SavedVideoData[]) : [];
-        setSavedVideos(Array.isArray(parsed) ? parsed : []);
+        const scraped = Array.isArray(parsed)
+          ? parsed.filter(v => v?.post?.username !== "manual_upload")
+          : [];
+        setSavedVideos(scraped);
       } catch {
         setSavedVideos([]);
       }

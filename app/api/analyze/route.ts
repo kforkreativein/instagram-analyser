@@ -2,11 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import prisma from "@/lib/prisma";
 import type { AIAnalysis, AnalyzeRequestBody, AnalyzeResponse, DeepAnalysis } from "../../../lib/types";
 import { calculateOutlierScore } from "../../../lib/utils";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
-import { getSettings } from "../../../lib/db";
 
 if (ffmpegPath) {
   ffmpeg.setFfmpegPath(ffmpegPath);
@@ -617,6 +619,19 @@ export async function POST(request: NextRequest) {
       apifyApiKey?: string;
     };
 
+    // Fetch user settings from database — all AI and Apify keys live here
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const dbUser = await prisma.user.findUnique({ where: { email: session.user.email } });
+    if (!dbUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    const userSettings = await prisma.settings.findUnique({ where: { userId: dbUser.id } });
+
+    const userApifyKey = userSettings?.apifyApiKey ?? "";
+
     const post = body.post ?? {};
     const videoId = toStringSafe((post as any).id, "unknown");
 
@@ -650,14 +665,14 @@ export async function POST(request: NextRequest) {
     }
     if (platform === "youtube") {
       console.log("YouTube Shorts detected, proceeding with Apify extraction.");
-      if (body.apifyApiKey) {
+      if (userApifyKey) {
         try {
           const input = {
             "startUrls": [{ "url": incomingUrl }],
             "max_results": 1,
             "scrape_shorts": true
           };
-          const apifyUrl = `https://api.apify.com/v2/acts/apify~youtube-scraper/run-sync-get-dataset-items?token=${body.apifyApiKey}`;
+          const apifyUrl = `https://api.apify.com/v2/acts/apify~youtube-scraper/run-sync-get-dataset-items?token=${userApifyKey}`;
           const apifyRes = await fetch(apifyUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -708,15 +723,31 @@ export async function POST(request: NextRequest) {
     const modelSelection =
       toStringSafe(body.model).trim() ||
       (provider === "OpenAI" ? "gpt-4o" : provider === "Anthropic" ? "claude-3-5-sonnet-20241022" : "gemini-2.5-flash");
-    const analysisApiKey = toStringSafe(body.analysisApiKey || body.apiKey).trim();
-    const transcriptionApiKey = toStringSafe(body.transcriptionApiKey || body.geminiApiKey).trim();
+
+    // Select the API key from the database based on the active provider
+    let analysisApiKey = "";
+    const activeProvider = userSettings?.activeProvider ?? provider;
+    if (activeProvider === "OpenAI") {
+      analysisApiKey = userSettings?.openaiApiKey ?? "";
+    } else if (activeProvider === "Anthropic") {
+      analysisApiKey = userSettings?.anthropicApiKey ?? "";
+    } else {
+      // Default to Gemini
+      analysisApiKey = userSettings?.geminiApiKey ?? "";
+    }
+
+    // Always use Gemini for transcription regardless of active provider
+    const transcriptionApiKey = userSettings?.geminiApiKey ?? "";
 
     const outputTypeRaw = toStringSafe((body as unknown as UnknownRecord).outputType);
     const outputType: "analysis" | ActionOutputType =
       outputTypeRaw === "director_prompt" || outputTypeRaw === "remix_ideas" ? outputTypeRaw : "analysis";
 
     if (!analysisApiKey) {
-      return NextResponse.json({ error: "Analysis API key missing" }, { status: 401 });
+      return NextResponse.json(
+        { error: `Missing API key for ${activeProvider}. Please add it in your Settings.` },
+        { status: 400 },
+      );
     }
 
     if (outputType !== "analysis") {
@@ -756,7 +787,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!transcriptionApiKey) {
-      return NextResponse.json({ error: "Gemini API key is required for transcription" }, { status: 401 });
+      return NextResponse.json({ error: "Gemini API key is required for transcription. Please add it in your Settings." }, { status: 400 });
     }
 
     const { transcript: transcriptInput, source: transcriptInputSource } = getTranscriptInput(post as any);
@@ -856,7 +887,7 @@ export async function POST(request: NextRequest) {
           const base64Img = Buffer.from(buffer).toString("base64");
           const mimeType = imgRes.headers.get("content-type") || "image/jpeg";
 
-          const visionAi = new GoogleGenerativeAI(analysisApiKey || getSettings().geminiApiKey || "");
+          const visionAi = new GoogleGenerativeAI(analysisApiKey || "");
           const visionModel = visionAi.getGenerativeModel({ model: "gemini-2.5-flash" });
 
           const visionPrompt = `Analyze this video frame. Return a strict JSON object with these keys: { "lighting": "...", "setting": "...", "format": "..." }. Keep descriptions under 3 words (e.g., 'Dark/Moody', 'Car Interior', 'Talking Head'). Return ONLY valid JSON, no markdown fences.`;

@@ -1,40 +1,21 @@
-import { getToken } from "next-auth/jwt";
-import { NextRequest, NextResponse } from "next/server";
+import { withAuth } from "next-auth/middleware"
 
-const protectedRoutes = [
-  "/home",
-  "/scripts",
-  "/clients",
-  "/settings",
-  "/uploads",
-  "/videos",
-  "/channels",
-];
+export default withAuth({
+  pages: {
+    signIn: "/signin",
+  },
+})
 
-const publicRoutes = ["/login", "/api/auth"];
-
-export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
-
-  // Allow public routes
-  if (publicRoutes.some((route) => pathname.startsWith(route))) {
-    return NextResponse.next();
-  }
-
-  // Check for protected routes
-  if (protectedRoutes.some((route) => pathname.startsWith(route))) {
-    const token = await getToken({ req: request });
-
-    if (!token) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-  }
-
-  return NextResponse.next();
-}
-
-export const config = {
+// THE GATES: Explicitly lock down every single dashboard route.
+// Do NOT put "/" or "/signin" or "/register" in this matcher array.
+export const config = { 
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|public).*)",
-  ],
-};
+    "/home/:path*", 
+    "/settings/:path*", 
+    "/scripts/:path*", 
+    "/channels/:path*", 
+    "/videos/:path*", 
+    "/uploads/:path*",
+    "/clients/:path*"
+  ] 
+}

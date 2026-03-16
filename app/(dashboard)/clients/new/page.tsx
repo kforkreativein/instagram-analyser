@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useToast } from "../../components/UI/Toast";
+import { useToast } from "@/app/components/UI/Toast";
 
 type WinningScript = {
   id: string;
