@@ -65,28 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     const base64String = Buffer.from(videoBuffer).toString("base64");
-    
-    // Fetch user's Gemini key from database
-    let resolvedKey = body.geminiApiKey?.trim();
-    try {
-      const session = await getServerSession(authOptions);
-      if (session?.user?.email) {
-        const user = await prisma.user.findUnique({ where: { email: session.user.email } });
-        if (user?.id) {
-          const userSettings = await prisma.settings.findUnique({ where: { userId: user.id } });
-          if (userSettings?.geminiApiKey) {
-            resolvedKey = userSettings.geminiApiKey;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch user settings:", error);
-    }
-    
-    if (!resolvedKey) {
-      return NextResponse.json({ error: "Gemini API key missing. Please add it in Settings." }, { status: 401 });
-    }
-    const genAI = new GoogleGenerativeAI(resolvedKey);
+    const genAI = new GoogleGenerativeAI("AIzaSyCKvEm49jfoK-kzZDeT7w9FSA4pSLuIedk");
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const result = await model.generateContent([
