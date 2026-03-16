@@ -22,8 +22,8 @@ export async function GET(req: Request) {
 
   } catch (error) {
     console.error("API Clients Error:", error);
-    // Return a clean error object, not a raw crash
-    return NextResponse.json({ error: "Failed to fetch clients", details: error }, { status: 500 });
+    // Strict Mandate: Silent recovery returning empty array
+    return NextResponse.json([]);
   }
 }
 

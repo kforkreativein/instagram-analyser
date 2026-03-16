@@ -62,8 +62,8 @@ export default function VideosPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const channels = new Set(savedVideos.map(v => v.post.username));
-    const views = savedVideos.reduce((acc, v) => acc + (v.post.metrics.views || 0), 0);
+    const channels = new Set((Array.isArray(savedVideos) ? savedVideos : []).map(v => v.post.username));
+    const views = (Array.isArray(savedVideos) ? savedVideos : []).reduce((acc, v) => acc + (v.post.metrics.views || 0), 0);
     return {
       videos: savedVideos.length,
       channels: channels.size,
@@ -129,7 +129,7 @@ export default function VideosPage() {
     if (!confirm("Are you sure you want to delete this video from history?")) return;
 
     const previousVideos = savedVideos;
-    const nextVideos = savedVideos.filter((video) => video.post.id !== videoId);
+    const nextVideos = (Array.isArray(savedVideos) ? savedVideos : []).filter((video) => video.post.id !== videoId);
     const previousHistoryRaw = localStorage.getItem(ANALYZED_HISTORY_KEY);
     const previousPostsRaw = localStorage.getItem(POSTS_CACHE_KEY);
     const previousLegacyPostsRaw = localStorage.getItem("instagram-posts-cache");
@@ -317,7 +317,7 @@ export default function VideosPage() {
           ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-[32px]">
-                {visibleVideos.map((item) => {
+                {(Array.isArray(visibleVideos) ? visibleVideos : []).map((item) => {
                   const dateSaved = new Date(item.savedAt).toLocaleDateString("en-GB", {
                     day: "numeric",
                     month: "short",

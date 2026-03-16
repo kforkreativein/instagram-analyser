@@ -55,7 +55,7 @@ function sanitizeChannel(payload: unknown): WatchlistChannel | null {
 export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
-        return NextResponse.json({ watchlist: [] }, { status: 401 });
+        return NextResponse.json({ watchlist: [] });
     }
 
     try {

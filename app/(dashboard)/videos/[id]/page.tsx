@@ -95,8 +95,7 @@ function readHistoryEntry(key: string, id: string): SavedVideoData | null {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SavedVideoData[];
-    if (!Array.isArray(parsed)) return null;
+    const parsed = (Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []) as SavedVideoData[];
     return parsed.find((item) => item?.post?.id === id && item?.analysis?.analysis) ?? null;
   } catch {
     return null;
@@ -119,8 +118,7 @@ function writeHistoryAnalysis(post: InstagramPost, analysis: AnalyzeResponse) {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
-      const parsed = JSON.parse(raw) as SavedVideoData[];
-      if (!Array.isArray(parsed)) continue;
+      const parsed = (Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []) as SavedVideoData[];
       let matched = false;
       const next = parsed.map((item) => {
         if (item?.post?.id !== post.id) return item;
@@ -199,8 +197,8 @@ export default function VideoAnalysisPage() {
     try {
       const postsRaw = localStorage.getItem(POSTS_CACHE_KEY);
       const analysesRaw = localStorage.getItem(ANALYSIS_CACHE_KEY);
-      const cachedPosts = postsRaw ? (JSON.parse(postsRaw) as Record<string, InstagramPost>) : {};
-      const cachedAnalyses = analysesRaw ? (JSON.parse(analysesRaw) as Record<string, AnalyzeResponse>) : {};
+      const cachedPosts = postsRaw && Array.isArray(JSON.parse(postsRaw)) === false ? (JSON.parse(postsRaw) as Record<string, InstagramPost>) : {};
+      const cachedAnalyses = analysesRaw && Array.isArray(JSON.parse(analysesRaw)) === false ? (JSON.parse(analysesRaw) as Record<string, AnalyzeResponse>) : {};
 
       const cachedPost = cachedPosts[id];
       const cachedAnalysis = cachedAnalyses[id];
@@ -538,7 +536,7 @@ export default function VideoAnalysisPage() {
                     <span className="text-[#8892A4]">👁</span> Vision Pattern Recognition
                   </h3>
                   <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-[8px] pb-2">
-                    {Object.entries(analysisPayload.vision_patterns).map(([key, val]) => {
+                    {(analysisPayload.vision_patterns && typeof analysisPayload.vision_patterns === 'object' ? Object.entries(analysisPayload.vision_patterns) : []).map(([key, val]) => {
                       if (!val) return null;
                       const strVal = Array.isArray(val) ? val.join(", ") : String(val);
                       return (

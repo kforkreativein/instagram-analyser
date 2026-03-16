@@ -56,8 +56,12 @@ function FormContent() {
       const fetchClient = async () => {
         try {
           const res = await fetch(`/api/clients`);
+          if (!res.ok) {
+            toast("error", "API Error", "Failed to load clients list.");
+            return;
+          }
           const clients = await res.json();
-          const client = clients.find((c: any) => c.id === editId);
+          const client = (Array.isArray(clients) ? clients : []).find((c: any) => c.id === editId);
           if (client) {
             setFormData({
               name: client.name,
@@ -102,11 +106,11 @@ function FormContent() {
   };
 
   const removeWinningScript = (id: string) => {
-    setWinningScripts(winningScripts.filter(s => s.id !== id));
+    setWinningScripts((Array.isArray(winningScripts) ? winningScripts : []).filter(s => s.id !== id));
   };
 
   const toggleReference = (id: string) => {
-    setWinningScripts(winningScripts.map(s => 
+    setWinningScripts((Array.isArray(winningScripts) ? winningScripts : []).map(s => 
       s.id === id ? { ...s, useAsReference: !s.useAsReference } : s
     ));
   };
@@ -352,7 +356,7 @@ function FormContent() {
           <div className="space-y-4">
             {/* SCRIPT LIST */}
             <div className="space-y-3">
-              {winningScripts.map((script) => (
+              {(Array.isArray(winningScripts) ? winningScripts : []).map((script) => (
                 <div key={script.id} className="p-4 bg-white/5 border border-white/10 rounded-xl relative group">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">

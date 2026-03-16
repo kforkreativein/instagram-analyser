@@ -69,7 +69,7 @@ export default function ChannelsDashboardPage() {
   // 5x5 Master Grid State
   const [showGridModal, setShowGridModal] = useState(false);
   const [masterGrid, setMasterGrid] = useState<FeedOutlier[]>([]);
-  const tracked = watchlist.map((channel) => channel.username);
+  const tracked = (Array.isArray(watchlist) ? watchlist : []).map((channel) => channel.username);
 
   async function requestWatchlist(method: "GET" | "POST" | "DELETE", body?: unknown) {
     const response = await fetch("/api/watchlist", {
@@ -132,6 +132,11 @@ export default function ChannelsDashboardPage() {
     async function loadNamedWatchlists() {
       try {
         const res = await fetch("/api/watchlists", { cache: "no-store" });
+        if (!res.ok) {
+          setNamedWatchlists([]);
+          console.error("API Error: Loading watchlists failed");
+          return;
+        }
         const payload = (await res.json().catch(() => ({}))) as { watchlists?: NamedWatchlist[] };
         setNamedWatchlists(Array.isArray(payload.watchlists) ? payload.watchlists : []);
       } catch {
@@ -220,7 +225,7 @@ export default function ChannelsDashboardPage() {
           });
           if (res.ok) {
             const payload = (await res.json()) as ScanProfileResponse;
-            const channelOutliers = payload.outliers.map((outlier) => ({ ...outlier, fromUsername: username }));
+            const channelOutliers = (Array.isArray(payload.outliers) ? payload.outliers : []).map((outlier) => ({ ...outlier, fromUsername: username }));
 
             if (channelOutliers.length > 0) {
               setNewOutliers((prevFeed) => mergeOutlierFeed(prevFeed, channelOutliers));
@@ -239,7 +244,7 @@ export default function ChannelsDashboardPage() {
   async function handleScanTracked() {
     // Collect all unique usernames from all named watchlists
     const allUsernames = Array.from(
-      new Set(namedWatchlists.flatMap((wl) => wl.profiles.map((p) => p.username)))
+      new Set((Array.isArray(namedWatchlists) ? namedWatchlists : []).flatMap((wl) => (Array.isArray(wl.profiles) ? wl.profiles : []).map((p) => p.username)))
     );
     if (allUsernames.length === 0) {
       setScanError("No profiles tracked. Build a watchlist first.");
@@ -268,7 +273,7 @@ export default function ChannelsDashboardPage() {
 
   async function handleExtractFormats(username: string) {
     // Get outliers for this specific creator
-    const creatorOutliers = newOutliers
+    const creatorOutliers = (Array.isArray(newOutliers) ? newOutliers : [])
       .filter((o) => o.fromUsername === username)
       .slice(0, 5);
 
@@ -294,7 +299,7 @@ export default function ChannelsDashboardPage() {
       return;
     }
 
-    const videoDescriptions = creatorOutliers
+    const videoDescriptions = (Array.isArray(creatorOutliers) ? creatorOutliers : [])
       .map((o, i) => `${i + 1}. "${o.caption || "No caption"}" (${formatViews(o.views)} views, ${(o.outlierScore ?? o.multiplier).toFixed(1)}× avg)`)
       .join("\n");
 
@@ -385,7 +390,7 @@ export default function ChannelsDashboardPage() {
       ]);
     });
 
-    const csvContent = rows.map((e) => e.join(",")).join("\n");
+    const csvContent = (Array.isArray(rows) ? rows : []).map((e) => (Array.isArray(e) ? e : []).join(",")).join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -470,7 +475,7 @@ export default function ChannelsDashboardPage() {
                 </button>
               </div>
               <div className="grid gap-[16px] grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                {newOutliers.map((outlier) => (
+                {(Array.isArray(newOutliers) ? newOutliers : []).map((outlier) => (
                   <article key={`${outlier.fromUsername}-${outlier.id}`} className="relative group glass-surface rounded-[12px] overflow-hidden cursor-pointer transition-all duration-300 hover:border-pink-500/30 hover:shadow-[0_0_25px_rgba(236,72,153,0.12),0_16px_40px_rgba(0,0,0,0.4)] hover:-translate-y-[3px]">
                     {outlier.permalink ? (
                       <a
@@ -610,7 +615,7 @@ export default function ChannelsDashboardPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[20px]">
-                {namedWatchlists.map((wl) => (
+                {(Array.isArray(namedWatchlists) ? namedWatchlists : []).map((wl) => (
                   <div
                     key={wl.id}
                     onClick={() => router.push(`/channels/build?id=${wl.id}`)}
@@ -649,7 +654,7 @@ export default function ChannelsDashboardPage() {
                     {/* Avatar Stack */}
                     <div className="mt-4 mb-2">
                       <div className="flex items-center">
-                        {wl.profiles.slice(0, 4).map((profile, idx) => (
+                        {(Array.isArray(wl.profiles) ? wl.profiles : []).slice(0, 4).map((profile, idx) => (
                           <div
                             key={profile.username}
                             className={`w-10 h-10 rounded-full border-2 border-[#0A0A0A] flex-shrink-0 overflow-hidden bg-gradient-to-br from-cyan-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white${idx > 0 ? " -ml-3" : ""}`}
@@ -688,7 +693,7 @@ export default function ChannelsDashboardPage() {
                       <button
                         type="button"
                         disabled={isScanning || wl.profiles.length === 0}
-                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleScanProfiles(wl.profiles.map((p) => p.username)); }}
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); void handleScanProfiles((Array.isArray(wl.profiles) ? wl.profiles : []).map((p) => p.username)); }}
                         className="w-full py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 font-semibold flex items-center justify-center gap-2 hover:bg-cyan-500/10 hover:border-cyan-500 hover:text-cyan-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         ⚡️ Scan Watchlist
@@ -728,7 +733,7 @@ export default function ChannelsDashboardPage() {
 
             <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar">
               <div className="grid grid-cols-5 gap-4">
-                {masterGrid.map((post, idx) => (
+                {(Array.isArray(masterGrid) ? masterGrid : []).map((post, idx) => (
                   <div 
                     key={idx} 
                     className="relative aspect-[9/14] rounded-2xl overflow-hidden border border-white/5 group bg-black/40 hover:border-cyan-500/50 transition-all duration-300"

@@ -45,9 +45,15 @@ export default function UploadsPage() {
   useEffect(() => {
     // Load from DB (persisted server-side)
     fetch("/api/uploads")
-      .then((r) => r.json())
-      .then((data: { uploads?: DbUpload[] }) => setDbUploads(data.uploads || []))
-      .catch(() => {});
+      .then((r) => {
+        if (!r.ok) {
+          setDbUploads([]);
+          return { uploads: [] };
+        }
+        return r.json();
+      })
+      .then((data: { uploads?: DbUpload[] }) => setDbUploads(Array.isArray(data.uploads) ? data.uploads : []))
+      .catch(() => { setDbUploads([]); });
 
     // Also load localStorage history
     if (typeof window !== "undefined") {
@@ -55,7 +61,7 @@ export default function UploadsPage() {
         const raw = localStorage.getItem(ANALYZED_HISTORY_KEY);
         if (raw) {
           const parsed = JSON.parse(raw) as SavedVideoData[];
-          const manual = parsed.filter(item => item?.post?.username === "manual_upload");
+          const manual = (Array.isArray(parsed) ? parsed : []).filter(item => item?.post?.username === "manual_upload");
           setRecentUploads(manual);
         }
       } catch { }
@@ -163,7 +169,8 @@ export default function UploadsPage() {
       setDbUploads(prev => [newDbRecord, ...prev]);
 
       // Save History to localStorage
-      const existing = JSON.parse(localStorage.getItem(ANALYZED_HISTORY_KEY) || "[]") as SavedVideoData[];
+      const rawHistory = localStorage.getItem(ANALYZED_HISTORY_KEY);
+      const existing = (Array.isArray(rawHistory ? JSON.parse(rawHistory!) : [])) ? JSON.parse(rawHistory!) : [];
       localStorage.setItem(ANALYZED_HISTORY_KEY, JSON.stringify([savedVideoData, ...existing]));
 
       // Save Cache so refresh works
@@ -189,14 +196,14 @@ export default function UploadsPage() {
     if (!confirm("Are you sure you want to delete this upload?")) return;
 
     // Updates local state
-    const updated = recentUploads.filter(u => u.post.id !== id);
+    const updated = (Array.isArray(recentUploads) ? recentUploads : []).filter(u => u.post.id !== id);
     setRecentUploads(updated);
 
     // Updates localStorage
     try {
       const raw = localStorage.getItem(ANALYZED_HISTORY_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as SavedVideoData[];
+        const parsed = (Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []) as SavedVideoData[];
         const next = parsed.filter(item => item?.post?.id !== id);
         localStorage.setItem(ANALYZED_HISTORY_KEY, JSON.stringify(next));
       }
@@ -360,7 +367,7 @@ export default function UploadsPage() {
               <p className="text-white/40 text-sm font-['DM_Sans']">No videos uploaded yet. Drop a file above to start.</p>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {dbUploads.map((item) => (
+                {(Array.isArray(dbUploads) ? dbUploads : []).map((item) => (
                   <div key={item.id} className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.07] rounded-[16px] overflow-hidden hover:border-[rgba(255,59,87,0.35)] transition-all group">
                     {/* Top: Video Thumbnail or Placeholder */}
                     <div className="relative w-full aspect-video bg-[#0d1117] overflow-hidden">

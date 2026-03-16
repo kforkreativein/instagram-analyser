@@ -112,9 +112,9 @@ async function saveVideoToHistory(newVideoData: SavedVideoData) {
     const res = await fetch("/api/database");
     const json = (await res.json().catch(() => ({ data: [] }))) as { data?: unknown };
     const existing = Array.isArray(json.data) ? (json.data as SavedVideoData[]) : [];
-
+    
     // Avoid duplicates — upsert by post.id
-    const deduped = [newVideoData, ...existing.filter((v) => v.post.id !== newVideoData.post.id)];
+    const deduped = [newVideoData, ...(Array.isArray(existing) ? existing : []).filter((v) => v.post.id !== newVideoData.post.id)];
 
     await fetch("/api/database", {
       method: "POST",
@@ -529,7 +529,7 @@ function HomePageContent() {
   }
 
   const channelMedianViews = useMemo(() => {
-    const values = (data?.posts ?? [])
+    const values = (Array.isArray(data?.posts) ? data.posts : [])
       .map((post) => post.metrics.views)
       .filter((value) => Number.isFinite(value) && value > 0)
       .sort((a, b) => a - b);
@@ -566,12 +566,28 @@ function HomePageContent() {
       });
 
       if (!response.ok) {
+        setData({ 
+          username, 
+          dateRange, 
+          outlierThreshold: 1.5, 
+          totalPosts: 0, 
+          filteredPosts: 0, 
+          metricStats: {} as any, 
+          formatShowdown: [], 
+          outliers: [], 
+          posts: [], 
+          source: "apify", 
+          warnings: [] 
+        });
         const errorData = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(errorData.error || "Failed to fetch data");
       }
 
       const payload = (await response.json()) as InstagramOutlierResponse;
-      setData(payload);
+      setData({
+        ...payload,
+        posts: Array.isArray(payload.posts) ? payload.posts : []
+      });
       setAnalysisMap({});
       setAnalysisErrors({});
       setAnalysisLoadingId(null);

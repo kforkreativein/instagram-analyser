@@ -142,12 +142,12 @@ function CreateWizardContent() {
   }, []);
 
   const selectedHook = useMemo(
-    () => hookOptions.find((item) => item.id === selectedHookId) ?? hookOptions[0],
+    () => (Array.isArray(hookOptions) ? hookOptions : []).find((item) => item.id === selectedHookId) ?? hookOptions[0],
     [selectedHookId],
   );
 
   const selectedStyle = useMemo(
-    () => styleOptions.find((item) => item.id === selectedStyleId) ?? styleOptions[0],
+    () => (Array.isArray(styleOptions) ? styleOptions : []).find((item) => item.id === selectedStyleId) ?? styleOptions[0],
     [selectedStyleId],
   );
 
@@ -251,7 +251,7 @@ function CreateWizardContent() {
 
         <div className="sticky top-0 z-30 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[#0D1017]/95 px-4 py-3 backdrop-blur mb-[16px]">
           <div className="flex flex-wrap items-center gap-2">
-            {navItems.map((item, index) => (
+            {(Array.isArray(navItems) ? navItems : []).map((item, index) => (
               <div key={`${item.label}-${index}`} className="flex items-center gap-2">
                 <button
                   type="button"
@@ -278,7 +278,7 @@ function CreateWizardContent() {
                   onChange={(event) => setCreativeEngine(event.target.value as CreativeEngine)}
                   className="bg-transparent text-xs text-gray-200 outline-none"
                 >
-                  {CREATIVE_ENGINE_OPTIONS.map((option) => (
+                  {(Array.isArray(CREATIVE_ENGINE_OPTIONS) ? CREATIVE_ENGINE_OPTIONS : []).map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label} - {option.description}
                     </option>
@@ -334,7 +334,7 @@ function CreateWizardContent() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {hookOptions.map((hook) => {
+                {(Array.isArray(hookOptions) ? hookOptions : []).map((hook) => {
                   const selected = selectedHookId === hook.id;
                   return (
                     <button
@@ -369,7 +369,7 @@ function CreateWizardContent() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {styleOptions.map((style) => {
+                {(Array.isArray(styleOptions) ? styleOptions : []).map((style) => {
                   const selected = selectedStyleId === style.id;
                   return (
                     <button

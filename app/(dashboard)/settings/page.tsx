@@ -88,7 +88,13 @@ export default function SettingsPage() {
     
     // Load all settings from server (Source of Truth)
     void fetch("/api/settings")
-      .then((r) => r.ok ? r.json() : null)
+      .then((r) => {
+        if (!r.ok) {
+          console.error("API Error: Loading settings failed");
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => {
         if (!data) return;
         
@@ -315,7 +321,7 @@ export default function SettingsPage() {
                       onChange={(e) => setActiveProvider(e.target.value as ProviderOption)}
                       className={premiumSelectClassName}
                     >
-                      {PROVIDER_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      {(Array.isArray(PROVIDER_OPTIONS) ? PROVIDER_OPTIONS : []).map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
                     </select>
                     <span className="absolute right-[14px] top-1/2 -translate-y-1/2 pointer-events-none text-[#5A6478]">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>
@@ -331,7 +337,7 @@ export default function SettingsPage() {
                       onChange={(e) => setActiveModel(e.target.value)}
                       className={premiumSelectClassName}
                     >
-                      {MODELS_BY_PROVIDER[activeProvider].map(m => <option key={m} value={m}>{MODEL_DISPLAY_NAMES[m] || m}</option>)}
+                      {(Array.isArray(MODELS_BY_PROVIDER[activeProvider]) ? MODELS_BY_PROVIDER[activeProvider] : []).map(m => <option key={m} value={m}>{MODEL_DISPLAY_NAMES[m] || m}</option>)}
                     </select>
                     <span className="absolute right-[14px] top-1/2 -translate-y-1/2 pointer-events-none text-[#5A6478]">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m6 9 6 6 6-6" /></svg>

@@ -13,8 +13,13 @@ export default function ScriptsDashboardPage() {
     async function loadScripts() {
       try {
         const res = await fetch("/api/scripts/load");
+        if (!res.ok) {
+          setScripts([]);
+          console.error("API Error: Loading scripts failed", await res.text());
+          return;
+        }
         const { data } = await res.json();
-        setScripts(data.scripts || []);
+        setScripts(Array.isArray(data?.scripts) ? data.scripts : []);
       } catch (err) {
         // Fallback to localStorage if API fails
         const raw = localStorage.getItem("scripts_history");
@@ -35,7 +40,7 @@ export default function ScriptsDashboardPage() {
 
     // Optimistic UI Update
     const previousScripts = [...scripts];
-    setScripts((scripts || []).filter(s => s.id !== id));
+    setScripts((Array.isArray(scripts) ? scripts : []).filter(s => s.id !== id));
 
     try {
       const response = await fetch("/api/scripts/delete", {
@@ -148,7 +153,7 @@ export default function ScriptsDashboardPage() {
                   className="py-[60px]"
                 />
               ) : (
-                scripts.map((script, idx) => (
+                (Array.isArray(scripts) ? scripts : []).map((script, idx) => (
                   <div
                     key={script.id || idx}
                     onClick={() => router.push(`/scripts/editor?id=${script.id}`)}

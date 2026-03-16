@@ -82,8 +82,13 @@ export default function ClientProfileHub() {
     setIsLoading(true);
     try {
       const res = await fetch("/api/clients");
+      if (!res.ok) {
+        toast("error", "API Error", "Failed to fetch clients.");
+        router.push("/clients");
+        return;
+      }
       const clients = await res.json();
-      const found = clients.find((c: any) => c.id === id);
+      const found = (Array.isArray(clients) ? clients : []).find((c: any) => c.id === id);
       if (found) {
         setClient(found);
       } else {
@@ -102,7 +107,7 @@ export default function ClientProfileHub() {
   }, [id]);
 
   const handleAnalyzeStyle = async () => {
-    if (!client || (client.examples || client.winningScripts || []).length === 0) {
+    if (!client || (Array.isArray(client?.examples || client?.winningScripts) ? (client?.examples || client?.winningScripts) : []).length === 0) {
       toast("warning", "Missing Scripts", "Please add winning scripts first to analyze style");
       return;
     }
@@ -190,7 +195,7 @@ export default function ClientProfileHub() {
   };
 
   const handleRefreshAnalytics = async () => {
-    if (!client?.trackedVideos || client.trackedVideos.length === 0) {
+    if (!client || !Array.isArray(client.trackedVideos) || client.trackedVideos.length === 0) {
       toast("warning", "No Videos", "No tracked videos to refresh.");
       return;
     }
@@ -323,7 +328,7 @@ export default function ClientProfileHub() {
                     Avoid List
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    {client.avoidTopics.split(',').map((t, i) => (
+                    {(typeof client.avoidTopics === 'string' ? client.avoidTopics.split(',') : []).map((t, i) => (
                       <span key={i} className="px-2 py-1 bg-[#FF3B57]/10 text-[#FF3B57] text-[11px] font-semibold rounded border border-[#FF3B57]/20">
                         {t.trim()}
                       </span>
@@ -456,7 +461,7 @@ export default function ClientProfileHub() {
                         <div className="space-y-2">
                           <div className="text-[10px] text-[#8892A4] font-bold uppercase tracking-widest">Repeated Phrases</div>
                           <div className="flex flex-wrap gap-2">
-                            {client.styleDNA.repeatedPhrases?.map((phrase, i) => (
+                            {(Array.isArray(client.styleDNA.repeatedPhrases) ? client.styleDNA.repeatedPhrases : []).map((phrase, i) => (
                               <span key={i} className="text-[11px] bg-white/5 border border-white/10 px-2 py-1 rounded text-[#8892A4]">
                                 "{phrase}"
                               </span>
@@ -551,7 +556,7 @@ export default function ClientProfileHub() {
 
                   {client.trackedVideos && client.trackedVideos.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
-                      {[...client.trackedVideos].sort((a,b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()).map((video, _idx) => {
+                      {(Array.isArray(client.trackedVideos) ? [...client.trackedVideos] : []).sort((a,b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime()).map((video, _idx) => {
                         const fmtNum = (n: number) => new Intl.NumberFormat("en-US", { notation: "compact", compactDisplay: "short" }).format(n);
                         const views = video.metrics?.views ? fmtNum(video.metrics.views) : "N/A";
                         const likes = video.metrics?.likes ? fmtNum(video.metrics.likes) : "N/A";

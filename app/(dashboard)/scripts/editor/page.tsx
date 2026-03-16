@@ -905,7 +905,7 @@ function ScriptsPageContent() {
   const [isClientsLoading, setIsClientsLoading] = useState(false);
 
   const selectedClient = useMemo(() => 
-    (clients || []).find(c => c.id === selectedClientId) || null
+    (Array.isArray(clients) ? clients : []).find(c => c.id === selectedClientId) || null
   , [clients, selectedClientId]);
 
   useEffect(() => {
@@ -913,14 +913,19 @@ function ScriptsPageContent() {
       setIsClientsLoading(true);
       try {
         const res = await fetch("/api/clients");
+        if (!res.ok) {
+          setClients([]);
+          console.error("API Error: Fetching clients failed", res.status);
+          return;
+        }
         const data = await res.json();
-        setClients(data);
+        setClients(Array.isArray(data) ? data : []);
         
         // Check for client in query param
         const clientIdParam = searchParams.get("client");
         if (clientIdParam) {
           setSelectedClientId(clientIdParam);
-          const client = (data || []).find((c: any) => c.id === clientIdParam);
+          const client = (Array.isArray(data) ? data : []).find((c: any) => c.id === clientIdParam);
           if (client) {
             if (client.language) setActiveLanguage(client.language);
             if (client.duration) {
@@ -963,7 +968,7 @@ function ScriptsPageContent() {
   );
 
   const wordCount = useMemo(
-    () => script.split(/\s+/).map((word) => word.trim()).filter(Boolean).length,
+    () => (Array.isArray(script.split(/\s+/)) ? script.split(/\s+/) : []).map((word) => word.trim()).filter(Boolean).length,
     [script],
   );
 
@@ -1001,12 +1006,12 @@ function ScriptsPageContent() {
 
 
   const hookTagOptions = useMemo(() => {
-    const tags = new Set(hookCards.map((card) => card.tag));
+    const tags = new Set((Array.isArray(hookCards) ? hookCards : []).map((card) => card.tag));
     return ["All", ...Array.from(tags)];
   }, [hookCards]);
 
   const filteredHookCards = useMemo(() => {
-    return hookCards.filter((card) => {
+    return (Array.isArray(hookCards) ? hookCards : []).filter((card) => {
       const matchesTag = hookTagFilter === "All" || card.tag === hookTagFilter;
       const query = hookSearchQuery.trim().toLowerCase();
       const matchesQuery =
@@ -1047,8 +1052,12 @@ function ScriptsPageContent() {
     (async () => {
       try {
         const res = await fetch("/api/scripts/load");
+        if (!res.ok) {
+          console.error("API Error: Loading scripts failed");
+          return;
+        }
         const { data } = await res.json();
-        const scripts: any[] = data.scripts || [];
+        const scripts: any[] = Array.isArray(data?.scripts) ? data.scripts : [];
         const found = scripts.find((s: any) => s.id === editId);
         if (!found) return;
 
@@ -1661,8 +1670,12 @@ function ScriptsPageContent() {
     try {
       // 1. Load existing scripts from API
       const loadRes = await fetch("/api/scripts/load");
+      if (!loadRes.ok) {
+        console.error("API Error: Loading scripts failed");
+        return;
+      }
       const { data } = await loadRes.json();
-      const existingScripts = data.scripts || [];
+      const existingScripts = Array.isArray(data?.scripts) ? data.scripts : [];
 
       // 2. Append new script (or update if ID exists)
       const existingIndex = existingScripts.findIndex((s: any) => s.id === newScript.id);

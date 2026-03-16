@@ -49,10 +49,10 @@ export default function AppSidebar() {
   const fetchBranding = async () => {
     try {
       const res = await fetch("/api/settings");
-      const data = await res.json();
-      if (data) {
-        setAgencyName(data.agencyName);
-        setAgencyLogo(data.agencyLogo);
+      if (res.ok) {
+        const data = await res.json();
+        setAgencyName(data?.agencyName || "");
+        setAgencyLogo(data?.agencyLogo || "");
       }
     } catch (error) {
       console.error("Failed to fetch branding:", error);

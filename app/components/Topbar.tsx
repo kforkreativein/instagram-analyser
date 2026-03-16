@@ -16,11 +16,13 @@ export default function Topbar() {
 
     const fetchBranding = async () => {
         try {
-            const res = await fetch("/api/settings");
+        const res = await fetch("/api/settings");
+        if (res.ok) {
             const data = await res.json();
             if (data?.agencyName) {
                 setAgencyName(data.agencyName);
             }
+        }
         } catch (error) {
             console.error("Failed to fetch branding:", error);
         }

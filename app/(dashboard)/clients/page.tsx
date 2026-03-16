@@ -56,8 +56,13 @@ export default function ClientsDashboard() {
     setIsLoading(true);
     try {
       const res = await fetch("/api/clients");
+      if (!res.ok) {
+        setClients([]);
+        console.error("API Error: Fetching clients failed with status", res.status);
+        return;
+      }
       const data = await res.json();
-      setClients(data);
+      setClients(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error("Failed to fetch clients:", error);
       toast("error", "Failed to load clients", "An error occurred while fetching the client list.");
@@ -86,7 +91,7 @@ export default function ClientsDashboard() {
     }
   };
 
-  const filteredClients = (clients || []).filter(c => 
+  const filteredClients = (Array.isArray(clients) ? clients : []).filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.niche.toLowerCase().includes(searchQuery.toLowerCase())
   );
