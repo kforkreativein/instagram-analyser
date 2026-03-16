@@ -17,9 +17,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const settings = await prisma.settings.findUnique({
-      where: { userId: session.user.id },
-    });
+    const [settings, user] = await Promise.all([
+      prisma.settings.findUnique({ where: { userId: session.user.id } }),
+      prisma.user.findUnique({ where: { id: session.user.id } })
+    ]);
 
     if (!settings) {
       return NextResponse.json({});
@@ -27,16 +28,17 @@ export async function GET(request: NextRequest) {
 
     // Return actual key values so the frontend can populate form fields
     return NextResponse.json({
-      geminiApiKey: settings.geminiApiKey ?? "",
-      openaiApiKey: settings.openaiApiKey ?? "",
-      anthropicApiKey: settings.anthropicApiKey ?? "",
-      apifyApiKey: settings.apifyApiKey ?? "",
-      elevenlabsApiKey: settings.elevenlabsApiKey ?? "",
-      sarvamApiKey: settings.sarvamApiKey ?? "",
-      agencyName: settings.agencyName ?? "",
-      agencyLogo: settings.agencyLogo ?? "",
-      activeProvider: settings.activeProvider ?? "Gemini",
-      activeModel: settings.activeModel ?? "Gemini 2.5 Flash",
+      name: user?.name ?? "",
+      geminiApiKey: settings?.geminiApiKey ?? "",
+      openaiApiKey: settings?.openaiApiKey ?? "",
+      anthropicApiKey: settings?.anthropicApiKey ?? "",
+      apifyApiKey: settings?.apifyApiKey ?? "",
+      elevenlabsApiKey: settings?.elevenlabsApiKey ?? "",
+      sarvamApiKey: settings?.sarvamApiKey ?? "",
+      agencyName: settings?.agencyName ?? "",
+      agencyLogo: settings?.agencyLogo ?? "",
+      activeProvider: settings?.activeProvider ?? "Gemini",
+      activeModel: settings?.activeModel ?? "Gemini 2.5 Flash",
     });
   } catch (error) {
     return NextResponse.json(
@@ -73,11 +75,17 @@ export async function PUT(request: NextRequest) {
       }
     }
 
-    const settings = await prisma.settings.upsert({
-      where: { userId: session.user.id },
-      update: update,
-      create: { userId: session.user.id, ...update },
-    });
+    const [settings] = await Promise.all([
+      prisma.settings.upsert({
+        where: { userId: session.user.id },
+        update: update,
+        create: { userId: session.user.id, ...update },
+      }),
+      body.name !== undefined ? prisma.user.update({
+        where: { id: session.user.id },
+        data: { name: typeof body.name === 'string' ? body.name.trim() : null }
+      }) : Promise.resolve()
+    ]);
 
     return NextResponse.json({ success: true, settings });
   } catch (error) {

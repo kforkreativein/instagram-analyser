@@ -59,6 +59,7 @@ const premiumFieldClassName = "w-full bg-[#0a0a0a] border border-white/10 rounde
 const premiumSelectClassName = `${premiumFieldClassName} appearance-none cursor-pointer`;
 
 export default function SettingsPage() {
+  const [name, setName] = useState("");
   const [emailAddress, setEmailAddress] = useState("");
   const [apifyApiKey, setApifyApiKey] = useState("");
   const [activeProvider, setActiveProvider] = useState<ProviderOption>("openai");
@@ -106,7 +107,8 @@ export default function SettingsPage() {
         if (data.elevenlabsApiKey) setElevenLabsApiKey(data.elevenlabsApiKey);
         if (data.sarvamApiKey) setSarvamApiKey(data.sarvamApiKey);
         
-        // Branding
+        // Account Info
+        if (data.name) setName(data.name);
         if (data.agencyName) setAgencyName(data.agencyName);
         if (data.agencyLogo) setAgencyLogoPreview(data.agencyLogo);
         
@@ -146,6 +148,7 @@ export default function SettingsPage() {
       agencyLogo: agencyLogoPreview,
       activeProvider: activeProvider.charAt(0).toUpperCase() + activeProvider.slice(1),
       activeModel: activeModel,
+      name: name.trim(),
     };
 
     try {
@@ -271,6 +274,16 @@ export default function SettingsPage() {
               <h2 className="font-['Syne'] font-[700] text-[13.5px] text-[#F0F2F7]">Account</h2>
             </div>
             <div className="p-6 flex flex-col gap-[16px]">
+              <div className="flex flex-col">
+                <label className="font-['JetBrains_Mono'] text-[10px] font-[500] text-[#5A6478] tracking-[0.07em] uppercase mb-[7px]">Full Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Krish Chhatrala"
+                  className={premiumFieldClassName}
+                />
+              </div>
               <div className="flex flex-col">
                 <label className="font-['JetBrains_Mono'] text-[10px] font-[500] text-[#5A6478] tracking-[0.07em] uppercase mb-[7px]">Email Address</label>
                 <input
