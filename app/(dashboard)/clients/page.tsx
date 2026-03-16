@@ -86,7 +86,7 @@ export default function ClientsDashboard() {
     }
   };
 
-  const filteredClients = clients.filter(c => 
+  const filteredClients = (clients || []).filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.niche.toLowerCase().includes(searchQuery.toLowerCase())
   );

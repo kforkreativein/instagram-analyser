@@ -35,7 +35,7 @@ export default function ScriptsDashboardPage() {
 
     // Optimistic UI Update
     const previousScripts = [...scripts];
-    setScripts(scripts.filter(s => s.id !== id));
+    setScripts((scripts || []).filter(s => s.id !== id));
 
     try {
       const response = await fetch("/api/scripts/delete", {

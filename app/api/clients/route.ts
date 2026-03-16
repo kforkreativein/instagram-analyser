@@ -3,23 +3,27 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
 
-export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  
+export async function GET(req: Request) {
   try {
-    const clients = await prisma.client.findMany({
-      where: {
-        userId: session.user.id
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      // Return an empty array instead of crashing or returning 401 if session is missing
+      return NextResponse.json([], { status: 200 }); 
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!user) return NextResponse.json([], { status: 200 });
+
+    const clients = await prisma.client.findMany({ 
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' }
     });
     return NextResponse.json(clients);
+
   } catch (error) {
-    console.error("[CLIENTS_GET]", error);
-    return NextResponse.json({ error: "Failed to fetch clients" }, { status: 500 });
+    console.error("API Clients Error:", error);
+    // Return a clean error object, not a raw crash
+    return NextResponse.json({ error: "Failed to fetch clients", details: error }, { status: 500 });
   }
 }
 
