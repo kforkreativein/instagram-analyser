@@ -107,7 +107,9 @@ export default function ClientProfileHub() {
   }, [id]);
 
   const handleAnalyzeStyle = async () => {
-    if (!client || (Array.isArray(client?.examples || client?.winningScripts) ? (client?.examples || client?.winningScripts) : []).length === 0) {
+    const scripts = client?.examples || client?.winningScripts || [];
+    
+    if (!client || (Array.isArray(scripts) ? scripts : []).length === 0) {
       toast("warning", "Missing Scripts", "Please add winning scripts first to analyze style");
       return;
     }
