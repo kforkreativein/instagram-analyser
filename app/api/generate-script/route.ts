@@ -42,6 +42,16 @@ function toStringSafe(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
+const structurePrompts: Record<string, string> = {
+  "Problem Solver": "Format the script exactly using these section headers: [Hook], [Problem], [Agitation], [Solution], [CTA].",
+  "Breakdown": "Format the script exactly using these section headers: [Hook], [Subject Intro], [Key Insight 1], [Key Insight 2], [Takeaway], [CTA].",
+  "Listicle": "Format the script exactly using these section headers: [Hook], [Item 1], [Item 2], [Item 3], [Bonus Tip], [CTA].",
+  "Case Study": "Format the script exactly using these section headers: [Hook], [The Setup], [The Conflict], [The Reveal/Result], [The Lesson], [CTA].",
+  "Tutorial": "Format the script exactly using these section headers: [Hook], [Prerequisites], [Step 1], [Step 2], [Step 3], [Result], [CTA].",
+  "Educational Story": "Format the script exactly using these section headers: [Hook], [Story Start], [The Turning Point], [The Core Lesson], [Application], [CTA].",
+  "Newscaster": "Format the script exactly using these section headers: [Hook], [The News/Update], [Why it Matters], [Your Prediction], [CTA]."
+};
+
 function buildPrompt(body: GenerateScriptBody): string {
   const topic = toStringSafe(body.topic, "Untitled topic");
   const executiveSummary = toStringSafe(body.executiveSummary, "No executive summary provided.");
@@ -53,6 +63,8 @@ function buildPrompt(body: GenerateScriptBody): string {
   const emotion = toStringSafe(body.emotion, "Engaging");
   const intensity = toStringSafe(String(body.intensity || ""), "5");
 
+  const structureInstruction = structurePrompts[storyStructure] || "Format the script with a clear Hook, Body, and CTA.";
+
   return [
     "Write a compelling short-form video script in 90-120 words.",
     "Follow the 4 hook commandments: ALIGNMENT, SPEED TO VALUE, CLARITY, CURIOSITY GAP.",
@@ -62,6 +74,10 @@ function buildPrompt(body: GenerateScriptBody): string {
     "Add [VISUAL: description] cues every 2-3 lines.",
     "Include [PAUSE] markers for pacing.",
     "End with a strong CTA.",
+    "",
+    "CRITICAL FORMATTING REQUIREMENT:",
+    structureInstruction,
+    "Do not use generic headers like [Context] or [Best Point First]. You must strictly follow the headers provided above.",
     "",
     `Topic: ${topic}`,
     `Executive Summary: ${executiveSummary}`,

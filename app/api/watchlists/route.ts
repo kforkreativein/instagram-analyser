@@ -39,31 +39,64 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const payload = await request.json();
-    const username = typeof payload.username === "string" ? payload.username.trim() : "";
     
-    if (!username) {
-      return NextResponse.json({ error: "A username is required." }, { status: 400 });
+    // Handle both formats: single username or { name, profiles }
+    const profilesToSave = Array.isArray(payload.profiles) 
+      ? payload.profiles 
+      : payload.username 
+        ? [payload] 
+        : [];
+
+    if (profilesToSave.length === 0) {
+      return NextResponse.json({ error: "At least one profile is required." }, { status: 400 });
     }
 
-    const newWatchlist = await prisma.watchlist.create({
-      data: {
-        userId: session.user.id,
-        username,
-        platform: payload.platform || "Instagram",
-        url: payload.url || "",
-        followers: typeof payload.followers === 'number' ? payload.followers : null,
-        miningQuadrant: payload.miningQuadrant || "",
-        profilePicUrl: payload.profilePicUrl || "",
-        isVerified: !!payload.isVerified,
-      },
-    });
+    const savedItems = [];
+
+    // Use transaction or separate upserts to satisfy the single-record schema
+    for (const profile of profilesToSave) {
+      const username = typeof profile.username === "string" ? profile.username.trim().replace(/^@+/, "") : "";
+      if (!username) continue;
+
+      const saved = await prisma.watchlist.upsert({
+        where: {
+          userId_username: {
+            userId: session.user.id,
+            username: username
+          }
+        },
+        update: {
+          platform: profile.platform || "Instagram",
+          url: profile.url || `https://www.instagram.com/${username}/`,
+          followers: typeof profile.followers === 'number' ? profile.followers : null,
+          miningQuadrant: profile.miningQuadrant || payload.miningQuadrant || "",
+          profilePicUrl: profile.profilePicUrl || "",
+          isVerified: !!profile.isVerified,
+        },
+        create: {
+          userId: session.user.id,
+          username,
+          platform: profile.platform || "Instagram",
+          url: profile.url || `https://www.instagram.com/${username}/`,
+          followers: typeof profile.followers === 'number' ? profile.followers : null,
+          miningQuadrant: profile.miningQuadrant || payload.miningQuadrant || "",
+          profilePicUrl: profile.profilePicUrl || "",
+          isVerified: !!profile.isVerified,
+        }
+      });
+      savedItems.push(saved);
+    }
 
     revalidatePath("/channels");
 
-    return NextResponse.json({ success: true, watchlist: newWatchlist });
+    return NextResponse.json({ 
+      success: true, 
+      count: savedItems.length,
+      watchlist: savedItems[0] // Return at least one for compatibility
+    });
   } catch (error) {
     console.error("[WATCHLISTS_POST]", error);
-    return NextResponse.json({ error: "Unable to save watchlist." }, { status: 500 });
+    return NextResponse.json({ error: "Unable to save watchlist items." }, { status: 500 });
   }
 }
 
@@ -73,21 +106,59 @@ export async function PUT(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const payload = await request.json();
-    const { id, ...updates } = payload;
+    const { id, name, profiles, ...updates } = payload;
 
-    if (!id) return NextResponse.json({ error: "id is required." }, { status: 400 });
+    if (!id && !profiles) return NextResponse.json({ error: "id or profiles required." }, { status: 400 });
 
-    const updated = await prisma.watchlist.update({
-      where: { id, userId: session.user.id },
-      data: updates
-    });
+    const results = [];
+
+    if (Array.isArray(profiles)) {
+      for (const profile of profiles) {
+        const username = typeof profile.username === "string" ? profile.username.trim().replace(/^@+/, "") : "";
+        if (!username) continue;
+
+        const saved = await prisma.watchlist.upsert({
+          where: {
+            userId_username: {
+              userId: session.user.id,
+              username: username
+            }
+          },
+          update: {
+            platform: profile.platform || "Instagram",
+            url: profile.url || `https://www.instagram.com/${username}/`,
+            followers: typeof profile.followers === 'number' ? profile.followers : null,
+            miningQuadrant: profile.miningQuadrant || payload.miningQuadrant || "",
+            profilePicUrl: profile.profilePicUrl || "",
+            isVerified: !!profile.isVerified,
+          },
+          create: {
+            userId: session.user.id,
+            username,
+            platform: profile.platform || "Instagram",
+            url: profile.url || `https://www.instagram.com/${username}/`,
+            followers: typeof profile.followers === 'number' ? profile.followers : null,
+            miningQuadrant: profile.miningQuadrant || payload.miningQuadrant || "",
+            profilePicUrl: profile.profilePicUrl || "",
+            isVerified: !!profile.isVerified,
+          }
+        });
+        results.push(saved);
+      }
+    } else if (id) {
+       const updated = await prisma.watchlist.update({
+        where: { id, userId: session.user.id },
+        data: updates
+      });
+      results.push(updated);
+    }
 
     revalidatePath("/channels");
 
-    return NextResponse.json({ success: true, watchlist: updated });
+    return NextResponse.json({ success: true, count: results.length, watchlist: results[0] });
   } catch (error) {
     console.error("[WATCHLISTS_PUT]", error);
-    return NextResponse.json({ error: "Unable to update watchlist." }, { status: 500 });
+    return NextResponse.json({ error: "Unable to update watchlist items." }, { status: 500 });
   }
 }
 

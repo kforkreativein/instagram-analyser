@@ -4,9 +4,11 @@ import { useRouter } from "next/navigation";
 import { Search, FileEdit, Plus, Trash2 } from "lucide-react";
 import EmptyState from "@/app/components/UI/EmptyState";
 import { useState, useEffect } from "react";
+import { useToast } from "@/app/components/UI/Toast";
 
 export default function ScriptsDashboardPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [scripts, setScripts] = useState<any[]>([]);
 
   useEffect(() => {
@@ -36,27 +38,24 @@ export default function ScriptsDashboardPage() {
   }, []);
 
   const handleDeleteScript = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Prevent navigating to the editor
+    e.stopPropagation();
 
-    // Optimistic UI Update
-    const previousScripts = [...scripts];
-    setScripts((Array.isArray(scripts) ? scripts : []).filter(s => s.id !== id));
+    if (!confirm("Are you sure you want to delete this script?")) return;
 
     try {
-      const response = await fetch("/api/scripts/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+      const response = await fetch(`/api/scripts/${id}`, {
+        method: "DELETE",
       });
 
       if (!response.ok) {
         throw new Error("Delete failed");
       }
+
+      setScripts((prev) => prev.filter((s) => s.id !== id));
+      toast("success", "Deleted", "Script removed successfully.");
     } catch (err) {
       console.error("Failed to delete script:", err);
-      // Rollback on failure
-      setScripts(previousScripts);
-      alert("Failed to delete script. Please try again.");
+      toast("error", "Delete Failed", "Could not remove the script. Please try again.");
     }
   };
 

@@ -893,7 +893,7 @@ function ScriptsPageContent() {
   const [pacingData, setPacingData] = useState<PacingData | null>(null);
   const [improvementLog, setImprovementLog] = useState<string[]>([]);
   const [visualCues, setVisualCues] = useState<string | null>(null);
-  const [imagePrompts, setImagePrompts] = useState<string | null>(null);
+  const [imagePrompts, setImagePrompts] = useState<any[] | null>(null);
 
   // Notion Sync state
   const [isSyncingNotion, setIsSyncingNotion] = useState(false);
@@ -1267,49 +1267,44 @@ function ScriptsPageContent() {
       return;
     }
 
-    const beforeContext = script.slice(Math.max(0, selection.start - 220), selection.start);
-    const afterContext = script.slice(selection.end, Math.min(script.length, selection.end + 220));
-
     setIsApplyingAiEdit(true);
     setAiEditError("");
 
     try {
-      // API keys are managed on the backend
-      const response = await fetch("/api/edit-text", {
+      const response = await fetch("/api/edit-selection", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           selectedText: selection.text,
-          command: aiCommand.trim(),
-          beforeContext,
-          afterContext,
+          prompt: aiCommand.trim(),
+          fullContext: script,
         }),
       });
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string | boolean; message?: string };
-        throw new Error(payload.message || (typeof payload.error === 'string' ? payload.error : null) || "Inline edit failed");
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Inline edit failed");
       }
 
-      const payload = (await response.json()) as { replacement?: string };
+      const payload = await response.json();
       const replacement = (payload.replacement || "").trim();
       if (!replacement) throw new Error("AI returned an empty replacement");
 
       const nextScriptText = script.slice(0, selection.start) + replacement + script.slice(selection.end);
-      pendingCaretOffsetRef.current = selection.start + replacement.length;
       setScript(nextScriptText);
+      
       setSelection(null);
-      setShowAskInput(false);
       setAiCommand("");
-      setAiEditError("");
-    } catch (error) {
-      setAiEditError(error instanceof Error ? error.message : "Inline edit failed");
+      setShowAskInput(false);
+      toast("success", "Script Updated", "AI edit applied successfully.");
+    } catch (error: any) {
+      setAiEditError(error.message);
+      toast("error", "Edit Failed", error.message);
     } finally {
       setIsApplyingAiEdit(false);
     }
   }
+
 
   function insertCommandTemplate(template: string) {
     setAiCommand(template);
@@ -1763,7 +1758,11 @@ function ScriptsPageContent() {
     setActiveAction(action);
 
     try {
-      const response = await fetch("/api/script-actions", {
+      const endpoint = action === 'prompts' ? '/api/generate-prompts' : 
+                      action === 'brainstorm' ? '/api/suggest-improvements' : 
+                      '/api/script-actions';
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1792,27 +1791,14 @@ function ScriptsPageContent() {
         setGeneratedCaption(data.result);
         toast("success", "Caption Generated", "Viral caption ready.");
       } else if (action === 'brainstorm') {
-        // Parse the JSON array from the response
-        const raw = data.result;
-        const firstBracket = raw.indexOf('[');
-        const lastBracket = raw.lastIndexOf(']');
-        if (firstBracket !== -1 && lastBracket !== -1) {
-          try {
-            const parsed = JSON.parse(raw.substring(firstBracket, lastBracket + 1));
-            setBrainstormSuggestions(parsed);
-          } catch {
-            toast("error", "Parse Error", "Could not parse brainstorm suggestions.");
-          }
-        } else {
-          // Fallback: show as text
-          toast("info", "Brainstorm Result", raw.slice(0, 150) + "...");
-        }
+        setBrainstormSuggestions(data.result);
+        toast("success", "Brainstorm Ready", "3 tactical suggestions generated.");
       } else if (action === 'visuals') {
         setVisualCues(data.result);
         toast("success", "Visual Storyboard Ready", "Visual cues generated for your script.");
       } else if (action === 'prompts') {
         setImagePrompts(data.result);
-        toast("success", "Image Prompts Ready", "AI image prompts generated for your script.");
+        toast("success", "Image Prompts Ready", "Structured scene prompts generated.");
       } else if (action === 'pacing') {
         try {
           const raw = data.result;
@@ -1863,6 +1849,10 @@ function ScriptsPageContent() {
     if (!topic.trim()) {
       toast("error", "Topic Required", "Please describe your topic first.");
       return;
+    }
+
+    if (scriptTitle === "New Script" && topic.trim() !== "") {
+      setScriptTitle(topic.trim().substring(0, 50));
     }
 
     setActiveStep(2);
@@ -2611,14 +2601,13 @@ LANGUAGE: ${activeLanguage}`;
     setIsRepurposing(true);
 
     try {
-      const response = await fetch("/api/scripts/generate", {
+      const response = await fetch("/api/repurpose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: strictPrompt,
-          provider,
-          apiKey: analysisApiKey,
-          model,
+          script: text,
+          platform,
+          language: activeLanguage,
         }),
       });
 
@@ -2627,8 +2616,8 @@ LANGUAGE: ${activeLanguage}`;
         throw new Error(payload.message || (typeof payload.error === 'string' ? payload.error : null) || "Repurposing failed");
       }
 
-      const payload = (await response.json()) as { text?: string };
-      setRepurposedText((payload.text || "").trim());
+      const payload = (await response.json()) as { result?: string };
+      setRepurposedText((payload.result || "").trim());
       toast("success", "Content Repurposed", `Script repurposed for ${platform}.`);
     } catch (err) {
       setRepurposeError(err instanceof Error ? err.message : "Repurposing failed");
@@ -3300,42 +3289,33 @@ LANGUAGE: ${activeLanguage}`;
             </div>
           </div>
 
-          <div className="p-[18px_20px]">
-            <div
-              ref={editorRef}
-              contentEditable
-              suppressContentEditableWarning
-              onInput={(event) => setScript(event.currentTarget.innerText?.replace(/\n+$/, '') || "")}
-              onMouseUp={() => window.requestAnimationFrame(updateSelectionFromEditor)}
-              onKeyUp={() => window.requestAnimationFrame(updateSelectionFromEditor)}
-              className="min-h-[240px] w-full whitespace-pre-wrap rounded-xl bg-black/30 backdrop-blur-xl border border-white/5 shadow-inner p-[16px] font-['JetBrains_Mono'] text-[12px] leading-[1.85] text-[#8892A4] outline-none focus:border-cyan-500/50 focus:shadow-[0_0_0_2px_rgba(59,255,200,0.07)]"
-              style={{ whiteSpace: "pre-wrap" }}
-              dangerouslySetInnerHTML={{
-                __html: (() => {
-                  const lines = script.split('\n');
-                  const slowLineNums = new Set<number>();
-                  if (pacingData?.segments) {
-                    pacingData.segments.forEach(seg => {
-                      if (seg.status === 'Slow' || seg.status === 'Critical') {
-                        for (let i = seg.lineStart - 1; i < seg.lineEnd; i++) slowLineNums.add(i);
-                      }
-                    });
-                  }
-                  return lines.map((line, idx) => {
-                    let newLine = line;
-                    if (fluffHighlights.length > 0) {
-                      fluffHighlights.forEach(fluff => {
-                        if (newLine.includes(fluff)) {
-                          newLine = newLine.replaceAll(fluff, `<span class="bg-red-500/20 text-red-300 border-b border-red-500/50 cursor-pointer" title="Fluff detected. Consider deleting.">${fluff}</span>`);
-                        }
-                      });
-                    }
-                    if (slowLineNums.has(idx)) {
-                      return `<span class="block rounded px-1 bg-red-500/10 shadow-[0_0_8px_rgba(239,68,68,0.2)] border-l-2 border-red-500/50" title="Pacing issue detected">${newLine || ' '}</span>`;
-                    }
-                    return newLine;
-                  }).join('\n');
-                })()
+          <div className="p-[18px_20px] relative">
+            <textarea
+              value={script}
+              onChange={(e) => setScript(e.target.value)}
+              onMouseUp={(e) => {
+                const target = e.currentTarget;
+                const start = target.selectionStart;
+                const end = target.selectionEnd;
+                if (start !== end) {
+                  const text = script.substring(start, end);
+                  setSelection({
+                    start,
+                    end,
+                    text,
+                    x: e.clientX,
+                    y: e.clientY - 40,
+                    rect: target.getBoundingClientRect()
+                  });
+                  setShowAskInput(false);
+                } else {
+                  setSelection(null);
+                }
+              }}
+              placeholder="Your viral script will appear here..."
+              className="min-h-[350px] w-full rounded-xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-inner p-[20px] font-['JetBrains_Mono'] text-[13px] leading-[1.8] text-[#3BFFC8] outline-none focus:border-[#3BFFC8]/30 transition-all resize-none overflow-y-auto"
+              style={{ 
+                textShadow: '0 0 8px rgba(59,255,200,0.1)'
               }}
             />
 
@@ -3343,8 +3323,8 @@ LANGUAGE: ${activeLanguage}`;
               <div
                 className="fixed bg-[#0D1017] border border-[rgba(255,255,255,0.15)] rounded-[10px] p-[6px] shadow-2xl z-50 animate-in fade-in zoom-in duration-200"
                 style={{
-                  top: selection.rect.bottom + window.scrollY + 10,
-                  left: selection.rect.left + window.scrollX + (selection.rect.width / 2) - 80,
+                  top: selection.y - 10,
+                  left: selection.x - 40,
                 }}
               >
                 <div className="flex items-center gap-[6px]">
@@ -3352,7 +3332,7 @@ LANGUAGE: ${activeLanguage}`;
                     onClick={() => setShowAskInput(true)}
                     className="flex items-center gap-[6px] bg-[#3BFFC8] text-[#080A0F] px-[12px] py-[6px] rounded-[6px] font-['DM_Sans'] text-[11.5px] font-[700] hover:bg-[#2fe6b4] transition-colors cursor-pointer"
                   >
-                    AI Edit
+                    ✨ Ask AI
                   </button>
                   <button
                     onClick={() => {
@@ -3370,15 +3350,18 @@ LANGUAGE: ${activeLanguage}`;
 
             {selection && showAskInput && (
               <div
-                className="fixed bg-[#0D1017] border border-[rgba(59,255,200,0.2)] rounded-[12px] p-[10px] shadow-2xl z-50 w-[300px] animate-in slide-in-from-top-2 duration-200"
+                className="fixed bg-[#0D1017] border border-[rgba(59,255,200,0.2)] rounded-[12px] p-[10px] shadow-2xl z-50 w-[320px] animate-in slide-in-from-top-2 duration-200"
                 style={{
-                  top: selection.rect.bottom + window.scrollY + 10,
-                  left: selection.rect.left + window.scrollX + (selection.rect.width / 2) - 150,
+                  top: selection.y - 10,
+                  left: selection.x - 160,
                 }}
               >
                 <div className="flex flex-col gap-[8px]">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] text-[#3BFFC8] font-mono bg-[#3BFFC8]/10 px-1.5 py-0.5 rounded">Selected: "{selection.text.substring(0, 20)}{selection.text.length > 20 ? '...' : ''}"</span>
+                  </div>
                   <textarea
-                    ref={askInputRef as any}
+                    autoFocus
                     value={aiCommand}
                     onChange={(e) => setAiCommand(e.target.value)}
                     onKeyDown={(e) => {
@@ -3387,256 +3370,280 @@ LANGUAGE: ${activeLanguage}`;
                         void applyInlineEdit();
                       }
                     }}
-                    placeholder="Ask AI to rewrite this..."
-                    className="w-full bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded-[8px] p-[10px] font-['DM_Sans'] text-[12.5px] text-[#F0F2F7] outline-none min-h-[60px] focus:border-[#3BFFC8]/40"
+                    placeholder="E.g., 'Make it punchier' or 'Add more emotion'..."
+                    className="w-full bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded-[8px] p-[10px] font-['DM_Sans'] text-[12.5px] text-[#F0F2F7] outline-none min-h-[70px] focus:border-[#3BFFC8]/40"
                   />
                   {aiEditError && <p className="text-[#FF3B57] text-[10px] font-['DM_Sans']">{aiEditError}</p>}
-                  <div className="flex justify-between items-center">
-                    <button onClick={() => setShowAskInput(false)} className="text-[#5A6478] text-[11px] hover:text-[#F0F2F7]">Cancel</button>
+                  <div className="flex justify-between items-center mt-1">
+                    <button onClick={() => { setShowAskInput(false); setSelection(null); }} className="text-[#5A6478] text-[11px] hover:text-[#F0F2F7]">Cancel</button>
                     <button
                       onClick={() => void applyInlineEdit()}
-                      disabled={isApplyingAiEdit || !aiCommand.trim()}
-                      className="bg-[#3BFFC8] text-[#080A0F] px-[12px] py-[6px] rounded-[6px] font-['DM_Sans'] text-[11.5px] font-[700] disabled:opacity-50"
+                      disabled={isApplyingAiEdit}
+                      className="bg-[#3BFFC8] text-[#080A0F] px-[14px] py-[6px] rounded-[6px] font-['DM_Sans'] text-[11.5px] font-[700] flex items-center gap-1 hover:shadow-[0_0_12px_rgba(59,255,200,0.3)] disabled:opacity-50"
                     >
-                      {isApplyingAiEdit ? "Processing..." : "Apply Edit"}
+                      {isApplyingAiEdit ? "Editing..." : "✨ Rewrite"}
                     </button>
                   </div>
                 </div>
               </div>
             )}
+          </div>
 
-            <div className="flex gap-[8px] mt-[10px] flex-wrap items-center">
-              <button onClick={() => void handlePostGenAction('pacing')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/60 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'pacing' ? '⏳ Processing...' : '⚖ Analyze Pacing'}
-              </button>
-              <button onClick={() => {
-                if (!pacingData) { toast("error", "Pacing Required", "Please analyze pacing first so the AI knows what to cut."); return; }
-                void handlePostGenAction('shorten');
-              }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/60 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'shorten' ? '⏳ Shortening...' : '✂️ Shorten Script'}
-              </button>
-              <button onClick={() => void handlePostGenAction('improve')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-emerald-500/30 text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-500/60 hover:shadow-[0_0_15px_rgba(16,185,129,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'improve' ? '⏳ Processing...' : pacingData ? '✦ Fix Pacing Issues' : '✦ Improve Script'}
-              </button>
-              <button onClick={() => {
-                setActiveAction('improve');
-                fetch("/api/script-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, action: 'improve', focusArea: 'hook', videoLength }) })
-                  .then(r => r.json()).then(d => { setScript(d.result); setImprovementLog(p => ["Hook rewritten", ...p]); toast("success", "Hook Improved", ""); }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
-              }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-sky-500/30 text-sky-400 bg-sky-500/5 hover:bg-sky-500/15 hover:border-sky-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'improve' ? '⏳' : '🎣 Sharpen Hook'}
-              </button>
-              <button onClick={() => {
-                setActiveAction('improve');
-                fetch("/api/script-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, action: 'improve', focusArea: 'structure', videoLength }) })
-                  .then(r => r.json()).then(d => { setScript(d.result); setImprovementLog(p => ["Story structure improved", ...p]); toast("success", "Structure Improved", ""); }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
-              }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-orange-500/30 text-orange-400 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'improve' ? '⏳' : '🏗 Fix Structure'}
-              </button>
-              <button onClick={() => void handlePostGenAction('visuals')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-purple-500/30 text-purple-400 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-500/60 hover:shadow-[0_0_15px_rgba(168,85,247,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'visuals' ? '⏳ Processing...' : '◎ Generate Visual Cues'}
-              </button>
-              <button onClick={() => void handlePostGenAction('prompts')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-cyan-500/30 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/15 hover:border-cyan-500/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'prompts' ? '⏳ Processing...' : 'Image/Video Prompts List'}
-              </button>
-              <button onClick={() => void handlePostGenAction('caption')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-amber-500/30 text-amber-400 bg-amber-500/5 hover:bg-amber-500/15 hover:border-amber-500/60 hover:shadow-[0_0_15px_rgba(245,158,11,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'caption' ? '⏳ Processing...' : '📝 Generate Caption'}
-              </button>
-              <button onClick={() => void handlePostGenAction('brainstorm')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-violet-400/40 text-violet-300 bg-violet-500/5 hover:bg-violet-500/15 hover:border-violet-400/70 hover:shadow-[0_0_15px_rgba(167,139,250,0.2)] font-['DM_Sans'] text-[11px] font-[700] cursor-pointer transition-all disabled:opacity-50">
-                {activeAction === 'brainstorm' ? '⏳ Brainstorming...' : '✦ Suggest 1% Improvement'}
-              </button>
+
+          <div className="flex gap-[8px] mt-[10px] flex-wrap items-center">
+            <button onClick={() => void handlePostGenAction('pacing')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/60 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'pacing' ? '⏳ Analyzing...' : '⚖ Analyze Pacing'}
+            </button>
+            <button onClick={() => {
+              if (!pacingData) { toast("error", "Pacing Required", "Please analyze pacing first so the AI knows what to cut."); return; }
+              void handlePostGenAction('shorten');
+            }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/60 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'shorten' ? '⏳ Shortening...' : '✂️ Shorten Script'}
+            </button>
+            <button onClick={() => void handlePostGenAction('improve')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-emerald-500/30 text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-500/60 hover:shadow-[0_0_15px_rgba(16,185,129,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'improve' ? '⏳ Improving...' : pacingData ? '✦ Fix Pacing Issues' : '✦ Improve Script'}
+            </button>
+            <button onClick={() => {
+              setActiveAction('sharpen-hook');
+              const text = script.trim();
+              const hookMatch = text.match(/\[HOOK\]([\s\S]*?)(?=\[|$)/i);
+              const originalHook = (hookMatch && hookMatch[1].trim()) || text.split('\n').filter(l => l.trim()).slice(0, 2).join('\n');
+              
+              fetch("/api/sharpen-hook", { 
+                method: "POST", 
+                headers: { "Content-Type": "application/json" }, 
+                body: JSON.stringify({ script, originalHook }) 
+              })
+                .then(r => r.json())
+                .then(d => { 
+                  if (d.error) throw new Error(d.error);
+                  const newHook = d.result;
+                  // Replace only the hook part if possible
+                  if (hookMatch) {
+                    setScript(text.replace(hookMatch[1].trim(), newHook));
+                  } else {
+                    const lines = text.split('\n');
+                    const hookLinesCount = originalHook.split('\n').length;
+                    const rest = lines.slice(hookLinesCount).join('\n');
+                    setScript(newHook + '\n\n' + rest);
+                  }
+                  setImprovementLog(p => ["Hook sharpened with viral framework", ...p]); 
+                  toast("success", "Hook Sharpened", "Viral hook applied."); 
+                })
+                .catch(e => toast("error", "Failed", e.message))
+                .finally(() => setActiveAction(null));
+            }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-sky-500/30 text-sky-400 bg-sky-500/5 hover:bg-sky-500/15 hover:border-sky-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'sharpen-hook' ? '⏳ Sharpening...' : '🎣 Sharpen Hook'}
+            </button>
+            <button onClick={() => {
+              setActiveAction('fix-structure');
+              fetch("/api/script-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, action: 'improve', focusArea: 'structure', videoLength }) })
+                .then(r => r.json()).then(d => { setScript(d.result); setImprovementLog(p => ["Story structure improved", ...p]); toast("success", "Structure Improved", ""); }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
+            }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-orange-500/30 text-orange-400 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'fix-structure' ? '⏳ Restructuring...' : '🏗 Fix Structure'}
+            </button>
+            <button onClick={() => void handlePostGenAction('visuals')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-purple-500/30 text-purple-400 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-500/60 hover:shadow-[0_0_15px_rgba(168,85,247,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'visuals' ? '⏳ Generating Visuals...' : '◎ Generate Visual Cues'}
+            </button>
+            <button onClick={() => void handlePostGenAction('prompts')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-cyan-500/30 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/15 hover:border-cyan-500/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'prompts' ? '⏳ Generating Prompts...' : 'Image/Video Prompts List'}
+            </button>
+            <button onClick={() => void handlePostGenAction('caption')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-amber-500/30 text-amber-400 bg-amber-500/5 hover:bg-amber-500/15 hover:border-amber-500/60 hover:shadow-[0_0_15px_rgba(245,158,11,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'caption' ? '⏳ Generating Caption...' : '📝 Generate Caption'}
+            </button>
+            <button onClick={() => void handlePostGenAction('brainstorm')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-violet-400/40 text-violet-300 bg-violet-500/5 hover:bg-violet-500/15 hover:border-violet-400/70 hover:shadow-[0_0_15px_rgba(167,139,250,0.2)] font-['DM_Sans'] text-[11px] font-[700] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'brainstorm' ? '⏳ Brainstorming...' : '✦ Suggest 1% Improvement'}
+            </button>
+          </div>
+
+          {/* Pacing Analysis Panel */}
+          {pacingData && (
+            <div className="mt-[14px] p-[16px] glass-surface rounded-[12px] border border-red-500/20 bg-gradient-to-br from-red-500/5 to-transparent">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-['Syne'] font-[700] text-[12px] text-red-400 uppercase tracking-[0.1em]">⚖ Pacing Analysis</h3>
+                <button onClick={() => setPacingData(null)} className="text-[10px] text-white/30 hover:text-white/60 transition-colors">✕ Clear</button>
+              </div>
+              <p className="font-['DM_Sans'] text-[11.5px] text-white/60 mb-3">{pacingData.summary}</p>
+              <div className="space-y-2">
+                {pacingData.segments?.map((seg, i) => (
+                  <div key={i} className={`flex items-start gap-3 p-2.5 rounded-lg border text-[11px] font-['DM_Sans'] ${seg.status === 'Critical' ? 'bg-red-500/10 border-red-500/30 text-red-300' : seg.status === 'Slow' ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'}`}>
+                    <span className="shrink-0 font-bold">Lines {seg.lineStart}–{seg.lineEnd}</span>
+                    <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold ${seg.status === 'Critical' ? 'bg-red-500/20' : seg.status === 'Slow' ? 'bg-amber-500/20' : 'bg-emerald-500/20'}`}>{seg.status}</span>
+                    <span className="text-white/60">{seg.note}</span>
+                  </div>
+                ))}
+              </div>
             </div>
+          )}
 
-            {/* Pacing Analysis Panel */}
-            {pacingData && (
-              <div className="mt-[14px] p-[16px] glass-surface rounded-[12px] border border-red-500/20 bg-gradient-to-br from-red-500/5 to-transparent">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-['Syne'] font-[700] text-[12px] text-red-400 uppercase tracking-[0.1em]">⚖ Pacing Analysis</h3>
-                  <button onClick={() => setPacingData(null)} className="text-[10px] text-white/30 hover:text-white/60 transition-colors">✕ Clear</button>
-                </div>
-                <p className="font-['DM_Sans'] text-[11.5px] text-white/60 mb-3">{pacingData.summary}</p>
-                <div className="space-y-2">
-                  {pacingData.segments?.map((seg, i) => (
-                    <div key={i} className={`flex items-start gap-3 p-2.5 rounded-lg border text-[11px] font-['DM_Sans'] ${seg.status === 'Critical' ? 'bg-red-500/10 border-red-500/30 text-red-300' : seg.status === 'Slow' ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'}`}>
-                      <span className="shrink-0 font-bold">Lines {seg.lineStart}–{seg.lineEnd}</span>
-                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold ${seg.status === 'Critical' ? 'bg-red-500/20' : seg.status === 'Slow' ? 'bg-amber-500/20' : 'bg-emerald-500/20'}`}>{seg.status}</span>
-                      <span className="text-white/60">{seg.note}</span>
-                    </div>
-                  ))}
-                </div>
+          {/* Brainstorm Suggestions Panel */}
+          {brainstormSuggestions && brainstormSuggestions.length > 0 && (
+            <div className="mt-[14px] p-[16px] glass-surface rounded-[12px] border border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-transparent">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-['Syne'] font-[700] text-[12px] text-violet-300 uppercase tracking-[0.1em]">✦ 1% Improvement Suggestions</h3>
+                <button onClick={() => setBrainstormSuggestions(null)} className="text-[10px] text-white/30 hover:text-white/60 transition-colors">✕ Clear</button>
               </div>
-            )}
-
-            {/* Brainstorm Suggestions Panel */}
-            {brainstormSuggestions && brainstormSuggestions.length > 0 && (
-              <div className="mt-[14px] p-[16px] glass-surface rounded-[12px] border border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-transparent">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-['Syne'] font-[700] text-[12px] text-violet-300 uppercase tracking-[0.1em]">✦ 1% Improvement Suggestions</h3>
-                  <button onClick={() => setBrainstormSuggestions(null)} className="text-[10px] text-white/30 hover:text-white/60 transition-colors">✕ Clear</button>
-                </div>
-                <div className="space-y-3">
-                  {brainstormSuggestions.map((s, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 bg-white/[0.03] rounded-xl border border-white/5">
-                      <span className={`mt-0.5 px-2 py-0.5 rounded text-[9px] font-bold shrink-0 ${s.impact === 'High' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                        {s.impact}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-['Syne'] font-[700] text-[12px] text-white mb-1">{s.title}</p>
-                        <p className="font-['DM_Sans'] text-[11.5px] text-white/60">{s.suggestion}</p>
-                      </div>
-                      <button
-                        onClick={() => void applyImprovement(s)}
-                        disabled={!!activeAction}
-                        className="shrink-0 px-3 py-1 rounded-lg bg-violet-500/15 border border-violet-400/30 text-violet-300 text-[10px] font-bold hover:bg-violet-500/25 transition-colors cursor-pointer disabled:opacity-50"
-                      >
-                        {activeAction === 'improving' ? '⏳' : 'Apply'}
-                      </button>
+              <div className="space-y-3">
+                {brainstormSuggestions.map((s, i) => (
+                  <div key={i} className="flex items-start gap-3 p-3 bg-white/[0.03] rounded-xl border border-white/5">
+                    <span className={`mt-0.5 px-2 py-0.5 rounded text-[9px] font-bold shrink-0 ${s.impact === 'High' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+                      {s.impact}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-['Syne'] font-[700] text-[12px] text-white mb-1">{s.title}</p>
+                      <p className="font-['DM_Sans'] text-[11.5px] text-white/60">{s.suggestion}</p>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {script.trim() && (
-              <div className="mt-[14px] p-[16px] glass-surface rounded-[12px] border border-[rgba(59,255,200,0.15)] bg-gradient-to-r from-[rgba(59,255,200,0.03)] to-[rgba(167,139,250,0.03)] opacity-90 transition-opacity hover:opacity-100">
-                <h3 className="font-['Syne'] font-[700] text-[12px] text-[#3BFFC8] uppercase tracking-[0.1em] mb-[16px]">Post-Generation Quality Check</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
-                  <label className="flex items-start gap-[10px] cursor-pointer group">
-                    <input type="checkbox" checked={evalInterestingness} onChange={() => setEvalInterestingness(!evalInterestingness)} className="w-[16px] h-[16px] mt-[2px] accent-[#3BFFC8] cursor-pointer rounded bg-[#111620]" />
-                    <span className="font-['DM_Sans'] text-[12.5px] text-[#8892A4] group-hover:text-[#F0F2F7] transition-colors"><strong className="text-[#F0F2F7]">Interestingness:</strong> Does it hold attention?</span>
-                  </label>
-                  <label className="flex items-start gap-[10px] cursor-pointer group">
-                    <input type="checkbox" checked={evalCompression} onChange={() => setEvalCompression(!evalCompression)} className="w-[16px] h-[16px] mt-[2px] accent-[#3BFFC8] cursor-pointer rounded bg-[#111620]" />
-                    <span className="font-['DM_Sans'] text-[12.5px] text-[#8892A4] group-hover:text-[#F0F2F7] transition-colors"><strong className="text-[#F0F2F7]">Compression:</strong> Are there zero wasted words?</span>
-                  </label>
-                  <label className="flex items-start gap-[10px] cursor-pointer group">
-                    <input type="checkbox" checked={evalHookGrip} onChange={() => setEvalHookGrip(!evalHookGrip)} className="w-[16px] h-[16px] mt-[2px] accent-[#3BFFC8] cursor-pointer rounded bg-[#111620]" />
-                    <span className="font-['DM_Sans'] text-[12.5px] text-[#8892A4] group-hover:text-[#F0F2F7] transition-colors"><strong className="text-[#F0F2F7]">Hook Grip:</strong> Does the first 3s lock them in?</span>
-                  </label>
-                  <label className="flex items-start gap-[10px] cursor-pointer group">
-                    <input type="checkbox" checked={evalEmotionMatch} onChange={() => setEvalEmotionMatch(!evalEmotionMatch)} className="w-[16px] h-[16px] mt-[2px] accent-[#3BFFC8] cursor-pointer rounded bg-[#111620]" />
-                    <span className="font-['DM_Sans'] text-[12.5px] text-[#8892A4] group-hover:text-[#F0F2F7] transition-colors"><strong className="text-[#F0F2F7]">Emotion Match:</strong> Evokes selected emotion?</span>
-                  </label>
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <input type="checkbox" className="mt-1 w-4 h-4 rounded border-white/20 bg-black/50 text-cyan-500 focus:ring-cyan-500/50 focus:ring-offset-0" />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">Dopamine Gap</span>
-                      <span className="text-xs text-white/50">Does the actual value beat the expectation set by the hook?</span>
-                    </div>
-                  </label>
-                </div>
-
-                {/* Iteration History / Improvement Log */}
-                {improvementLog.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-white/5">
-                    <h4 className="font-['Syne'] font-[700] text-[11px] text-white/40 uppercase tracking-[0.12em] mb-2">📋 Improvement History</h4>
-                    <ul className="space-y-1.5">
-                      {improvementLog.map((entry, i) => (
-                        <li key={i} className="flex items-center gap-2 text-[11px] font-['DM_Sans'] text-white/50">
-                          <span className="text-[#3BFFC8] shrink-0">✓</span>
-                          <span className="truncate">{entry}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <button
+                      onClick={() => void applyImprovement(s)}
+                      disabled={!!activeAction}
+                      className="shrink-0 px-3 py-1 rounded-lg bg-violet-500/15 border border-violet-400/30 text-violet-300 text-[10px] font-bold hover:bg-violet-500/25 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {activeAction === 'improving' ? '⏳' : 'Apply'}
+                    </button>
                   </div>
-                )}
+                ))}
               </div>
-            )}
+            </div>
+          )}
 
-
-            {audioPlaylist.length > 0 ? (
-              <div className="flex items-center justify-between bg-[rgba(59,255,200,0.08)] border border-[rgba(59,255,200,0.25)] p-4 rounded-xl w-full mt-[16px]">
-                <div className="flex items-center gap-4 w-full">
-                  <button
-                    onClick={() => setIsPlayingAudio(!isPlayingAudio)}
-                    className="flex items-center justify-center w-10 h-10 rounded-full bg-[#3BFFC8] text-[#111620] hover:scale-105 transition-transform"
-                  >
-                    {isPlayingAudio ? "⏸" : "▶"}
-                  </button>
-
-                  {/* Playbar UI */}
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={audioProgress || 0}
-                    onChange={(e) => {
-                      if (audioRef.current && audioRef.current.duration) {
-                        const seekTime = (Number(e.target.value) / 100) * audioRef.current.duration;
-                        audioRef.current.currentTime = seekTime;
-                        setAudioProgress(Number(e.target.value));
-                      }
-                    }}
-                    className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#3BFFC8]"
-                  />
-
-                  <div className="text-sm font-medium text-[#3BFFC8] whitespace-nowrap">
-                    Playing Audio ({currentTrack + 1} / {audioPlaylist.length})
+          {script.trim() && (
+            <div className="mt-[14px] p-[16px] glass-surface rounded-[12px] border border-[rgba(59,255,200,0.15)] bg-gradient-to-r from-[rgba(59,255,200,0.03)] to-[rgba(167,139,250,0.03)] opacity-90 transition-opacity hover:opacity-100">
+              <h3 className="font-['Syne'] font-[700] text-[12px] text-[#3BFFC8] uppercase tracking-[0.1em] mb-[16px]">Post-Generation Quality Check</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
+                <label className="flex items-start gap-[10px] cursor-pointer group">
+                  <input type="checkbox" checked={evalInterestingness} onChange={() => setEvalInterestingness(!evalInterestingness)} className="w-[16px] h-[16px] mt-[2px] accent-[#3BFFC8] cursor-pointer rounded bg-[#111620]" />
+                  <span className="font-['DM_Sans'] text-[12.5px] text-[#8892A4] group-hover:text-[#F0F2F7] transition-colors"><strong className="text-[#F0F2F7]">Interestingness:</strong> Does it hold attention?</span>
+                </label>
+                <label className="flex items-start gap-[10px] cursor-pointer group">
+                  <input type="checkbox" checked={evalCompression} onChange={() => setEvalCompression(!evalCompression)} className="w-[16px] h-[16px] mt-[2px] accent-[#3BFFC8] cursor-pointer rounded bg-[#111620]" />
+                  <span className="font-['DM_Sans'] text-[12.5px] text-[#8892A4] group-hover:text-[#F0F2F7] transition-colors"><strong className="text-[#F0F2F7]">Compression:</strong> Are there zero wasted words?</span>
+                </label>
+                <label className="flex items-start gap-[10px] cursor-pointer group">
+                  <input type="checkbox" checked={evalHookGrip} onChange={() => setEvalHookGrip(!evalHookGrip)} className="w-[16px] h-[16px] mt-[2px] accent-[#3BFFC8] cursor-pointer rounded bg-[#111620]" />
+                  <span className="font-['DM_Sans'] text-[12.5px] text-[#8892A4] group-hover:text-[#F0F2F7] transition-colors"><strong className="text-[#F0F2F7]">Hook Grip:</strong> Does the first 3s lock them in?</span>
+                </label>
+                <label className="flex items-start gap-[10px] cursor-pointer group">
+                  <input type="checkbox" checked={evalEmotionMatch} onChange={() => setEvalEmotionMatch(!evalEmotionMatch)} className="w-[16px] h-[16px] mt-[2px] accent-[#3BFFC8] cursor-pointer rounded bg-[#111620]" />
+                  <span className="font-['DM_Sans'] text-[12.5px] text-[#8892A4] group-hover:text-[#F0F2F7] transition-colors"><strong className="text-[#F0F2F7]">Emotion Match:</strong> Evokes selected emotion?</span>
+                </label>
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input type="checkbox" className="mt-1 w-4 h-4 rounded border-white/20 bg-black/50 text-cyan-500 focus:ring-cyan-500/50 focus:ring-offset-0" />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-white group-hover:text-cyan-400 transition-colors">Dopamine Gap</span>
+                    <span className="text-xs text-white/50">Does the actual value beat the expectation set by the hook?</span>
                   </div>
+                </label>
+              </div>
+
+              {/* Iteration History / Improvement Log */}
+              {improvementLog.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/5">
+                  <h4 className="font-['Syne'] font-[700] text-[11px] text-white/40 uppercase tracking-[0.12em] mb-2">📋 Improvement History</h4>
+                  <ul className="space-y-1.5">
+                    {improvementLog.map((entry, i) => (
+                      <li key={i} className="flex items-center gap-2 text-[11px] font-['DM_Sans'] text-white/50">
+                        <span className="text-[#3BFFC8] shrink-0">✓</span>
+                        <span className="truncate">{entry}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
+              )}
+            </div>
+          )}
+
+
+          {audioPlaylist.length > 0 ? (
+            <div className="flex items-center justify-between bg-[rgba(59,255,200,0.08)] border border-[rgba(59,255,200,0.25)] p-4 rounded-xl w-full mt-[16px]">
+              <div className="flex items-center gap-4 w-full">
                 <button
-                  onClick={() => {
-                    setAudioPlaylist([]);
-                    setIsPlayingAudio(false);
-                  }}
-                  className="ml-4 text-xs text-gray-500 hover:text-white transition-colors"
+                  onClick={() => setIsPlayingAudio(!isPlayingAudio)}
+                  className="flex items-center justify-center w-10 h-10 rounded-full bg-[#3BFFC8] text-[#111620] hover:scale-105 transition-transform"
                 >
-                  Close
+                  {isPlayingAudio ? "⏸" : "▶"}
                 </button>
 
-                <audio
-                  ref={audioRef}
-                  src={`data:audio/mp3;base64,${audioPlaylist[currentTrack]}`}
-                  onEnded={handleTrackEnded}
-                  autoPlay={isPlayingAudio}
-                  onTimeUpdate={() => {
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={audioProgress || 0}
+                  onChange={(e) => {
                     if (audioRef.current && audioRef.current.duration) {
-                      setAudioProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
+                      const seekTime = (Number(e.target.value) / 100) * audioRef.current.duration;
+                      audioRef.current.currentTime = seekTime;
+                      setAudioProgress(Number(e.target.value));
                     }
                   }}
+                  className="flex-1 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#3BFFC8]"
                 />
+
+                <div className="text-sm font-medium text-[#3BFFC8] whitespace-nowrap">
+                  Playing Audio ({currentTrack + 1} / {audioPlaylist.length})
+                </div>
               </div>
-            ) : (
               <button
-                type="button"
-                disabled={isPlayingTTS || !script.trim()}
-                onClick={() => void handleListen()}
-                className="w-full mt-[16px] flex items-center justify-center gap-2 py-3 rounded-xl border border-rose-500/30 text-rose-400 bg-rose-500/5 hover:bg-rose-500/15 hover:border-rose-500/60 transition-all hover:shadow-[0_0_15px_rgba(244,63,94,0.15)] font-['DM_Sans'] text-[13px] font-[500] cursor-pointer disabled:opacity-50"
+                onClick={() => {
+                  setAudioPlaylist([]);
+                  setIsPlayingAudio(false);
+                }}
+                className="ml-4 text-xs text-gray-500 hover:text-white transition-colors"
               >
-                🔊 {isPlayingTTS ? "Generating Audio..." : "Listen to Script"}
+                Close
               </button>
-            )}
-          </div>
+
+              <audio
+                ref={audioRef}
+                src={`data:audio/mp3;base64,${audioPlaylist[currentTrack]}`}
+                onEnded={handleTrackEnded}
+                autoPlay={isPlayingAudio}
+                onTimeUpdate={() => {
+                  if (audioRef.current && audioRef.current.duration) {
+                    setAudioProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={isPlayingTTS || !script.trim()}
+              onClick={() => void handleListen()}
+              className="w-full mt-[16px] flex items-center justify-center gap-2 py-3 rounded-xl border border-rose-500/30 text-rose-400 bg-rose-500/5 hover:bg-rose-500/15 hover:border-rose-500/60 transition-all hover:shadow-[0_0_15px_rgba(244,63,94,0.15)] font-['DM_Sans'] text-[13px] font-[500] cursor-pointer disabled:opacity-50"
+            >
+              🔊 {isPlayingTTS ? "Generating Audio..." : "Listen to Script"}
+            </button>
+          )}
         </section>
 
         {/* Caption Output */}
         {generatedCaption && (
-          <div className="mt-6 relative group">
-            <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-2xl p-6">
-              <h3 className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-4">📝 Caption</h3>
-              <p className="text-white/90 whitespace-pre-wrap text-[13.5px] leading-relaxed font-['DM_Sans'] pr-8">{generatedCaption}</p>
-              <div className="absolute bottom-4 right-4 flex items-center gap-2">
-                <button onClick={() => { void navigator.clipboard.writeText(generatedCaption); toast("success", "Copied", "Caption copied"); }} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/15 border border-white/10 rounded-lg text-white/50 hover:text-white transition-all text-sm">⎘</button>
-                <button onClick={() => setGeneratedCaption(null)} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/30 rounded-lg text-white/30 hover:text-red-400 transition-all text-xs">✕</button>
-              </div>
+          <div className="mt-4 bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6 relative">
+            <h3 className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-4">📝 Caption</h3>
+            <p className="text-white/90 whitespace-pre-wrap text-[13.5px] leading-relaxed font-['DM_Sans'] pr-8">{generatedCaption}</p>
+            <div className="absolute bottom-4 right-4 flex items-center gap-2">
+              <button onClick={() => { if (generatedCaption) { void navigator.clipboard.writeText(generatedCaption); toast("success", "Copied", "Caption copied"); } }} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-white/15 border border-white/10 rounded-lg text-white/50 hover:text-white transition-all text-sm">⎘</button>
+              <button onClick={() => setGeneratedCaption(null)} className="w-8 h-8 flex items-center justify-center bg-white/5 hover:bg-red-500/20 border border-white/10 hover:border-red-500/30 rounded-lg text-white/30 hover:text-red-400 transition-all text-xs">✕</button>
             </div>
           </div>
         )}
 
         {/* Visual Storyboard Output */}
         {visualCues && (
-          <div className="mt-6">
-            <div className="flex justify-between items-center mb-4">
+          <div className="mt-4 bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6 relative">
+            <div className="flex justify-between items-center mb-6">
               <h3 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">◎ Visual Storyboard</h3>
               <div className="flex items-center gap-2">
-                <button onClick={() => { void navigator.clipboard.writeText(visualCues); toast("success", "Copied", "Storyboard copied"); }} className="text-[10px] px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-400 rounded transition-colors">Copy</button>
+                <button onClick={() => { if (visualCues) { void navigator.clipboard.writeText(visualCues); toast("success", "Copied", "Storyboard copied"); } }} className="text-[10px] px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-400 rounded transition-colors">Copy</button>
                 <button onClick={() => setVisualCues(null)} className="text-gray-500 hover:text-white transition-colors text-xs">✕</button>
               </div>
             </div>
             <div className="ml-2 space-y-0">
-              {visualCues.split('\n').filter(l => l.trim()).map((line, i) => {
-                const tsMatch = line.match(/^(\[?\d+[s:]?\d*\]?|\d+-\d+s?)/);
+              {visualCues?.split('\n').filter(l => l.trim()).map((line, i) => {
+                const cleanLine = line.replace(/\*\*/g, '').trim();
+                const tsMatch = cleanLine.match(/^(\[?\d+[s:]?\d*\]?|\d+-\d+s?)/);
                 const timestamp = tsMatch ? tsMatch[0] : null;
-                const rest = timestamp ? line.slice(timestamp.length).replace(/^[-:\s]+/, '').trim() : line.trim();
+                const rest = timestamp ? cleanLine.slice(timestamp.length).replace(/^[-:\s]+/, '').trim() : cleanLine;
                 return (
                   <div key={i} className="flex gap-4 items-start border-l border-white/10 ml-2 pl-4 pb-6">
                     <div className="shrink-0 w-16 text-right">
@@ -3654,28 +3661,29 @@ LANGUAGE: ${activeLanguage}`;
           </div>
         )}
 
-        {/* AI Image Prompts Output */}
-        {imagePrompts && (
-          <div className="mt-6">
-            <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-3">
-              <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">🖼 AI Image Prompts</h3>
-              <button onClick={() => setImagePrompts(null)} className="text-gray-500 hover:text-white transition-colors text-xs">✕</button>
+        {/* Overhauled Image/Video Prompts UI */}
+        {imagePrompts && Array.isArray(imagePrompts) && (
+          <div className="mt-6 space-y-6">
+            <div className="flex justify-between items-center border-b border-white/10 pb-3">
+              <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">🖼 Scene-by-Scene Visual Prompts</h3>
+              <button onClick={() => setImagePrompts(null)} className="text-gray-500 hover:text-white transition-colors text-xs">✕ Close</button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              {imagePrompts.split('\n').filter(l => l.trim()).map((line, i) => {
-                const text = line.replace(/^\d+\.\s*/, '').trim();
-                if (!text) return null;
-                return (
-                  <div key={i} className="relative flex items-start gap-3 p-5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors group/card">
-                    <span className="shrink-0 w-5 h-5 mt-0.5 flex items-center justify-center rounded bg-white/5 text-gray-400 text-[9px] font-bold">{i + 1}</span>
-                    <p className="flex-1 font-['DM_Sans'] text-[12px] text-gray-300 leading-relaxed">{text}</p>
-                    <button
-                      onClick={() => { void navigator.clipboard.writeText(text); }}
-                      className="shrink-0 opacity-0 group-hover/card:opacity-100 text-gray-500 hover:text-white transition-all text-xs px-2 py-1"
-                    >⎘</button>
+            <div className="space-y-6">
+              {imagePrompts.map((item, index) => (
+                <div key={index} className="bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6">
+                  <h4 className="text-white font-medium text-[15px] mb-4">"{item.scriptLine}"</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-black/20 p-4 rounded-lg border border-white/5">
+                      <span className="text-[10px] text-[#FF3366] uppercase tracking-wider font-bold">Image Prompt</span>
+                      <p className="text-gray-300 text-sm mt-2 leading-relaxed font-['JetBrains_Mono']">{item.imagePrompt}</p>
+                    </div>
+                    <div className="bg-black/20 p-4 rounded-lg border border-white/5">
+                      <span className="text-[10px] text-[#00E5FF] uppercase tracking-wider font-bold">Video Prompt</span>
+                      <p className="text-gray-300 text-sm mt-2 leading-relaxed font-['JetBrains_Mono']">{item.videoPrompt}</p>
+                    </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -3704,21 +3712,23 @@ LANGUAGE: ${activeLanguage}`;
                   <div className="space-y-2">
                     <span className="text-[10px] font-bold text-cyan-500/70 uppercase tracking-widest">Viral Title Idea</span>
                     <p className="text-[15px] text-white font-['Syne'] font-bold leading-tight">
-                      {packagingData.titleText}
+                      {packagingData?.titleText}
                     </p>
                   </div>
                   <div className="space-y-2">
                     <span className="text-[10px] font-bold text-cyan-500/70 uppercase tracking-widest">Cover Visual Concept</span>
                     <p className="text-[13px] text-gray-300 leading-relaxed italic">
-                      {packagingData.coverVisual}
+                      {packagingData?.coverVisual}
                     </p>
                   </div>
                 </div>
                 <div className="px-5 pb-4">
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(`Title: ${packagingData.titleText}\nCover: ${packagingData.coverVisual}`);
-                      toast("success", "Copied", "Packaging info copied to clipboard.");
+                      if (packagingData) {
+                        void navigator.clipboard.writeText(`Title: ${packagingData.titleText}\nCover: ${packagingData.coverVisual}`);
+                        toast("success", "Copied", "Packaging info copied to clipboard.");
+                      }
                     }}
                     className="text-[10px] font-bold text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1.5 rounded-lg hover:bg-cyan-400/20 transition-all uppercase tracking-wider"
                   >
@@ -3819,9 +3829,11 @@ LANGUAGE: ${activeLanguage}`;
                         <h4 className="text-[11px] font-bold text-white uppercase tracking-[0.05em]">Editor Blueprint ({emotionFilter})</h4>
                         <button
                           onClick={() => {
-                            const text = `Editor Instructions:\n${directorsCutData.editorInstructions.join('\n')}\n\nVisual Cues:\n${JSON.stringify(directorsCutData.cues, null, 2)}`;
-                            navigator.clipboard.writeText(text);
-                            toast("success", "Copied", "Instructions copied for editor.");
+                            if (directorsCutData) {
+                              const text = `Editor Instructions:\n${directorsCutData.editorInstructions?.join('\n') || ''}\n\nVisual Cues:\n${JSON.stringify(directorsCutData.cues, null, 2)}`;
+                              void navigator.clipboard.writeText(text);
+                              toast("success", "Copied", "Instructions copied for editor.");
+                            }
                           }}
                           className="bg-white/5 border border-white/10 p-[6px_12px] rounded-lg text-cyan-400 text-[10px] font-bold hover:bg-white/10 transition-all font-['DM_Sans']"
                         >
@@ -3850,9 +3862,11 @@ LANGUAGE: ${activeLanguage}`;
                   <div className="flex items-center gap-4">
                     <button
                       onClick={() => {
-                        const textToCopy = JSON.stringify(promptDirectorData, null, 2);
-                        navigator.clipboard.writeText(textToCopy);
-                        toast("success", "Copied", "All prompts copied to clipboard");
+                        if (promptDirectorData) {
+                          const textToCopy = JSON.stringify(promptDirectorData, null, 2);
+                          void navigator.clipboard.writeText(textToCopy);
+                          toast("success", "Copied", "All prompts copied to clipboard");
+                        }
                       }}
                       className="text-[11px] font-bold px-3 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-md border border-emerald-500/20 transition-all"
                     >
@@ -3867,10 +3881,12 @@ LANGUAGE: ${activeLanguage}`;
                   </div>
                 </div>
                 <div className="p-6 max-h-[500px] overflow-y-auto text-sm text-gray-300 space-y-6 scrollbar-hide">
-                  <div className="bg-emerald-400/5 p-5 rounded-xl border border-emerald-400/10">
-                    <h4 className="text-[10px] uppercase text-emerald-500 font-bold mb-2 tracking-widest">Character Identity</h4>
-                    <p className="text-gray-300 font-['DM_Sans'] leading-relaxed">{promptDirectorData.character_identity}</p>
-                  </div>
+                  {promptDirectorData?.character_identity && (
+                    <div className="bg-emerald-400/5 p-5 rounded-xl border border-emerald-400/10">
+                      <h4 className="text-[10px] uppercase text-emerald-500 font-bold mb-2 tracking-widest">Character Identity</h4>
+                      <p className="text-gray-300 font-['DM_Sans'] leading-relaxed">{promptDirectorData.character_identity}</p>
+                    </div>
+                  )}
                   <div className="flex flex-col gap-4">
                     {promptDirectorData.prompts
                       .filter(p => p.image_prompt !== 'IGNORE' && p.video_prompt !== 'IGNORE')
@@ -3907,9 +3923,9 @@ LANGUAGE: ${activeLanguage}`;
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch mt-[16px]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start mt-[16px]">
           {/* A/B HOOK TESTING */}
-          <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[600px]">
+          <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[500px]">
             <div className="p-[14px_18px] border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between bg-[rgba(255,255,255,0.02)]">
               <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.1em] text-[#8892A4]">✦ Hook Variation Lab</span>
             </div>
@@ -3922,7 +3938,7 @@ LANGUAGE: ${activeLanguage}`;
               >
                 {isGeneratingHooks ? "Generating..." : "✦ Generate Alternate Hooks"}
               </button>
-              <div className="flex flex-col gap-3 mt-4 flex-1 overflow-y-auto pr-1">
+              <div className="flex flex-col gap-3 mt-4 flex-1 overflow-y-auto pr-1 custom-scrollbar scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                 {abHooks.map((h, i) => (
                   <div
                     key={i}
@@ -3959,7 +3975,7 @@ LANGUAGE: ${activeLanguage}`;
           </div>
 
           {/* REPURPOSE CONTENT */}
-          <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[600px]">
+          <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[500px]">
             <div className="p-[14px_18px] border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between">
               <span className="font-['JetBrains_Mono'] text-[9px] uppercase text-[#5A6478]">REPURPOSE CONTENT</span>
             </div>
@@ -3987,7 +4003,7 @@ LANGUAGE: ${activeLanguage}`;
                   );
                 })}
               </div>
-              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-[12px] flex-1 overflow-y-auto">
+              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-[12px] flex-1 overflow-y-auto custom-scrollbar scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                 {repurposedText ? (
                   <div className="font-['DM_Sans'] text-[12.5px] leading-[1.65] text-[#8892A4] whitespace-pre-wrap">{repurposedText}</div>
                 ) : (

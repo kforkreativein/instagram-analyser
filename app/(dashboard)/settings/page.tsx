@@ -314,6 +314,9 @@ export default function SettingsPage() {
                       value={apifyApiKey}
                       onChange={(e) => setApifyApiKey(e.target.value)}
                       placeholder="apify_api_..."
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      spellCheck={false}
                       className={premiumFieldClassName + " pr-10"}
                     />
                     <button type="button" onClick={() => toggleKey("apify")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A6478] hover:text-[#F0F2F7] transition-colors">
@@ -365,6 +368,9 @@ export default function SettingsPage() {
                       type={showKeys.gemini ? "text" : "password"}
                       value={geminiApiKey}
                       onChange={(e) => setGeminiApiKey(e.target.value)}
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      spellCheck={false}
                       className={premiumFieldClassName + " pr-10"}
                     />
                     <button type="button" onClick={() => toggleKey("gemini")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A6478] hover:text-[#F0F2F7] transition-colors">
@@ -380,6 +386,9 @@ export default function SettingsPage() {
                       type={showKeys.openai ? "text" : "password"}
                       value={openaiApiKey}
                       onChange={(e) => setOpenaiApiKey(e.target.value)}
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      spellCheck={false}
                       className={premiumFieldClassName + " pr-10"}
                     />
                     <button type="button" onClick={() => toggleKey("openai")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A6478] hover:text-[#F0F2F7] transition-colors">
@@ -396,6 +405,9 @@ export default function SettingsPage() {
                       value={anthropicApiKey}
                       onChange={(e) => setAnthropicApiKey(e.target.value)}
                       placeholder="Enter your Anthropic API key"
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      spellCheck={false}
                       className={premiumFieldClassName + " pr-10"}
                     />
                     <button type="button" onClick={() => toggleKey("anthropic")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A6478] hover:text-[#F0F2F7] transition-colors">
@@ -429,6 +441,9 @@ export default function SettingsPage() {
                       type={showKeys.elevenlabs ? "text" : "password"}
                       value={elevenLabsApiKey}
                       onChange={(e) => setElevenLabsApiKey(e.target.value)}
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      spellCheck={false}
                       className={premiumFieldClassName + " pr-10"}
                     />
                     <button type="button" onClick={() => toggleKey("elevenlabs")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A6478] hover:text-[#F0F2F7] transition-colors">
@@ -444,6 +459,9 @@ export default function SettingsPage() {
                       type={showKeys.sarvam ? "text" : "password"}
                       value={sarvamApiKey}
                       onChange={(e) => setSarvamApiKey(e.target.value)}
+                      autoComplete="new-password"
+                      data-1p-ignore="true"
+                      spellCheck={false}
                       className={premiumFieldClassName + " pr-10"}
                     />
                     <button type="button" onClick={() => toggleKey("sarvam")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#5A6478] hover:text-[#F0F2F7] transition-colors">

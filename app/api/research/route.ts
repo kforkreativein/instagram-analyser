@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
         const provider = body.provider || "Gemini";
         const apiKey = (body.apiKey || "").trim();
-        const model = (body.model || "gemini-2.5-flash").trim();
+        const model = (body.model || "gemini-2.0-flash").trim();
 
         if (!apiKey) {
             return NextResponse.json({ error: true, message: `${provider} API key is required.` }, { status: 401 });
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
         } else {
             const genAI = new GoogleGenerativeAI(apiKey);
             const geminiModel = genAI.getGenerativeModel({
-                model: model.startsWith("gemini-") ? model : "gemini-2.5-flash",
+                model: model.startsWith("gemini-") ? model : "gemini-2.0-flash",
                 generationConfig: { temperature: 0.5 },
             });
             const response = await geminiModel.generateContent(systemPrompt);
