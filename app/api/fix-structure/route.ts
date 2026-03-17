@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     if (!apiKey) return NextResponse.json({ error: "No API Key found" }, { status: 400 });
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     
     const prompt = `Analyze this script. Reformat it using clear bracketed tags on their own lines: [HOOK], [BODY], and [CALL TO ACTION]. Add double line breaks between sections. Do not change the actual spoken words, just organize it properly. Output raw text only, no markdown blocks.\n\nScript:\n${scriptText}`;
     

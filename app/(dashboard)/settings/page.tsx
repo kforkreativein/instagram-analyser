@@ -19,20 +19,18 @@ const PROVIDER_OPTIONS: Array<{ value: ProviderOption; label: string }> = [
 ];
 
 const MODELS_BY_PROVIDER: Record<ProviderOption, string[]> = {
-  openai: ["GPT-5", "GPT-5.1", "GPT-5.2"],
-  gemini: [
-    "gemini-3-flash-preview",
-    "gemini-3.1-pro-preview",
-  ],
-  anthropic: [
-    "Claude 3.7 Sonnet",
-    "Claude 4.5 Sonnet",
-  ],
+  openai: ["gpt-5-mini-2025-08-07", "gpt-5.4"],
+  gemini: ["gemini-3-flash-preview", "gemini-3.1-pro-preview"],
+  anthropic: ["claude-4.5-haiku", "claude-4.6-sonnet"],
 };
 
 const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "gemini-3-flash-preview": "Gemini 3 Flash",
   "gemini-3.1-pro-preview": "Gemini 3.1 Pro",
+  "gpt-5-mini-2025-08-07": "GPT-5 Mini",
+  "gpt-5.4": "GPT-5.4",
+  "claude-4.5-haiku": "Claude 4.5 Haiku",
+  "claude-4.6-sonnet": "Claude 4.6 Sonnet",
 };
 
 function toAiProvider(provider: ProviderOption): AIProvider {

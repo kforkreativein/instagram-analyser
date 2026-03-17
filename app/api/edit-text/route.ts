@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     if (engine === "claude_3_5_sonnet") {
       const anthropic = new Anthropic({ apiKey: anthropicApiKey });
       const result = await anthropic.messages.create({
-        model: "claude-3-5-sonnet-latest",
+        model: "claude-4.5-haiku",
         max_tokens: 400,
         temperature: 0.2,
         system: "You are a precise editor that rewrites only selected text.",
@@ -108,17 +108,17 @@ export async function POST(request: NextRequest) {
         .map((item) => (item.type === "text" ? item.text : ""))
         .join("\n")
         .trim();
-      model = "claude-3-5-sonnet-latest";
+      model = "claude-4.5-haiku";
     } else if (engine === "gemini_1_5_pro") {
       const genAI = new GoogleGenerativeAI(geminiApiKey);
-      const gemini = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+      const gemini = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
       const result = await gemini.generateContent(prompt);
       replacement = result.response.text().trim();
-      model = "gemini-1.5-pro";
+      model = "gemini-3-flash-preview";
     } else {
       const openai = new OpenAI({ apiKey: openaiApiKey });
       const result = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-5-mini-2025-08-07",
         temperature: 0.2,
         messages: [
           { role: "system", content: "You rewrite selected passages. Return only the replacement text." },
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
         ],
       });
       replacement = result.choices[0]?.message?.content?.trim() ?? "";
-      model = "gpt-4o";
+      model = "gpt-5-mini-2025-08-07";
     }
 
     if (!replacement) {

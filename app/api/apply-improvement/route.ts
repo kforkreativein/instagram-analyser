@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const selectedModel = "gemini-2.5-flash";
+    const selectedModel = "gemini-3-flash-preview";
     const model = genAI.getGenerativeModel({ model: selectedModel });
 
     const prompt = `You are a Retention Engineer. Apply the following specific improvement to this script. Make ONLY the targeted change described — do not rewrite anything else. Keep the language, tone, and structure identical to the original.

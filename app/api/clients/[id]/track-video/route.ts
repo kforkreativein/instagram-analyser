@@ -118,7 +118,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     // 2. Deep Analysis with Gemini
-    const selectedModel = "gemini-2.5-flash";
+    const selectedModel = "gemini-3-flash-preview";
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: selectedModel });
 

@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     if (!apiKey) return NextResponse.json({ error: "No API Key found" }, { status: 400 });
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     
     const prompt = `You are an expert scriptwriter. Rewrite ONLY the very first sentence (the Hook) of this script to make it incredibly punchy, curious, and viral. Keep the rest of the script exactly the same. Output ONLY the raw updated script text. Do not add markdown or conversational filler.\n\nScript:\n${scriptText}`;
     

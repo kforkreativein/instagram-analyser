@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+        const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
         const systemPrompt = `You are a script editor. The user wants to change this specific text: '${selectedText}'. Their instruction is: '${prompt}'. Rewrite ONLY the selected text based on the instruction. Do not return the surrounding context, only the replacement text.`;
 

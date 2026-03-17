@@ -11,12 +11,12 @@ type Provider = "Gemini" | "OpenAI" | "Anthropic";
 
 function mapOpenAIModel(model: string): string {
     const modelMap: Record<string, string> = {
-        "GPT-4o": "gpt-4o",
+        "GPT-4o": "gpt-5-mini-2025-08-07",
         "GPT-5": "gpt-5",
         "GPT-5.1": "gpt-5.1",
         "GPT-5.2": "gpt-5.2",
     };
-    return modelMap[model] ?? "gpt-4o";
+    return modelMap[model] ?? "gpt-5-mini-2025-08-07";
 }
 
 function mapAnthropicModel(model: string): string {
@@ -24,7 +24,7 @@ function mapAnthropicModel(model: string): string {
         "Claude 3.7 Sonnet": "claude-3-7-sonnet-latest",
         "Claude 4.5 Sonnet": "claude-4-5-sonnet-latest",
     };
-    return modelMap[model] ?? "claude-3-5-sonnet-20241022";
+    return modelMap[model] ?? "claude-4.5-haiku";
 }
 
 function mapGeminiModel(model: string): string {
@@ -35,7 +35,7 @@ function mapGeminiModel(model: string): string {
         "Gemini 3.0 Flash": "gemini-3-flash-preview",
         "Gemini 3.0 Pro": "gemini-3-flash-preview",
     };
-    return modelMap[model] ?? "gemini-2.5-flash";
+    return modelMap[model] ?? "gemini-3-flash-preview";
 }
 
 export async function POST(request: NextRequest) {

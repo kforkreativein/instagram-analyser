@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // 1. MATCH THE FRONTEND VARIABLES EXACTLY
-    const { tweakAttribute = "", analysis = {}, transcript = "", onePercentFocus = "", selectedModel = "gemini-1.5-pro", clientProfile } = body;
+    const { tweakAttribute = "", analysis = {}, transcript = "", onePercentFocus = "", selectedModel = "gemini-3-flash-preview", clientProfile } = body;
 
     // 2. SAFELY PULL API KEY (From body OR Settings Database)
     const dbSettings = await getSettings(session.user.id);
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-pro-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     // Safely fallback analysis object in case it is null/undefined
     const safeAnalysis = analysis || {};

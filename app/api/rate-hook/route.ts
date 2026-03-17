@@ -45,21 +45,21 @@ The score should be based on how much it forces the viewer to keep watching. Sug
     if (provider === "OpenAI") {
       const openai = new OpenAI({ apiKey });
       const response = await openai.chat.completions.create({
-        model: model || "gpt-4o",
+        model: model || "gpt-5-mini-2025-08-07",
         messages: [{ role: "user", content: prompt }],
       });
       generatedText = response.choices[0]?.message?.content?.trim() ?? "";
     } else if (provider === "Anthropic") {
       const anthropic = new Anthropic({ apiKey });
       const response = await anthropic.messages.create({
-        model: model || "claude-3-5-sonnet-latest",
+        model: model || "claude-4.5-haiku",
         max_tokens: 1000,
         messages: [{ role: "user", content: prompt }],
       });
       generatedText = (response.content[0] as any).text.trim();
     } else {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const geminiModel = genAI.getGenerativeModel({ model: model || "gemini-1.5-pro" });
+      const geminiModel = genAI.getGenerativeModel({ model: model || "gemini-3-flash-preview" });
       const response = await geminiModel.generateContent(prompt);
       generatedText = response.response.text().trim();
     }

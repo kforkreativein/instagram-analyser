@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
         const provider = body.provider || "Gemini";
         const apiKey = (body.apiKey || "").trim();
-        const model = (body.model || "gemini-2.0-flash").trim();
+        const model = (body.model || "gemini-3-flash-preview").trim();
 
         if (!apiKey) {
             return NextResponse.json({ error: true, message: `${provider} API key is required.` }, { status: 401 });
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         if (provider === "OpenAI") {
             const openai = new OpenAI({ apiKey });
             const response = await openai.chat.completions.create({
-                model: model.startsWith("gpt-") ? model : "gpt-4o",
+                model: model.startsWith("gpt-") ? model : "gpt-5-mini-2025-08-07",
                 messages: [{ role: "user", content: systemPrompt }],
                 response_format: { type: "json_object" }
             });
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         } else if (provider === "Anthropic") {
             const anthropic = new Anthropic({ apiKey });
             const response = await anthropic.messages.create({
-                model: model.startsWith("claude-") ? model : "claude-3-5-sonnet-20241022",
+                model: model.startsWith("claude-") ? model : "claude-4.5-haiku",
                 max_tokens: 1000,
                 messages: [{ role: "user", content: systemPrompt }],
             });
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         } else {
             const genAI = new GoogleGenerativeAI(apiKey);
             const geminiModel = genAI.getGenerativeModel({
-                model: model.startsWith("gemini-") ? model : "gemini-2.0-flash",
+                model: model.startsWith("gemini-") ? model : "gemini-3-flash-preview",
                 generationConfig: { 
                   temperature: 0.5,
                   responseMimeType: "application/json" 

@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 
 const TRANSCRIPTION_PROMPT =
   "You are an expert transcriber. Watch this video and transcribe the exact spoken words. You MUST return the output strictly in standard .SRT format with sequential numbers, timestamps (00:00:00,000 --> 00:00:00,000), and the text on a third line per block. Example:\n1\n00:00:00,000 --> 00:00:03,500\nHello, welcome to this video.\n\n2\n00:00:03,500 --> 00:00:07,000\nToday we are covering an important topic.";
-const TRANSCRIPTION_MODEL = "gemini-2.5-flash";
+const TRANSCRIPTION_MODEL = "gemini-3-flash-preview";
 const MAX_TRANSCRIPT_CHARS = 12000;
 
 /** Strip SRT timestamps/numbers to get plain spoken text for LLM analysis */
@@ -242,30 +242,30 @@ function normalizeProvider(value: string): Provider {
 
 function mapGeminiModel(modelSelection: string): string {
   const normalized = modelSelection.toLowerCase().trim();
-  if (!normalized) return "gemini-2.5-flash";
+  if (!normalized) return "gemini-3-flash-preview";
   if (normalized.startsWith("gemini-")) return normalized;
   if (normalized.includes("2.5") && normalized.includes("pro")) return "gemini-2.5-pro";
-  if (normalized.includes("1.5") && normalized.includes("pro")) return "gemini-1.5-pro";
+  if (normalized.includes("1.5") && normalized.includes("pro")) return "gemini-3-flash-preview";
   if (normalized.includes("pro")) return "gemini-2.5-pro";
-  return "gemini-2.5-flash";
+  return "gemini-3-flash-preview";
 }
 
 function mapOpenAIModel(modelSelection: string): string {
   const normalized = modelSelection.toLowerCase().trim();
-  if (!normalized) return "gpt-4o";
+  if (!normalized) return "gpt-5-mini-2025-08-07";
   if (normalized.startsWith("gpt-")) return normalized;
   if (normalized.includes("4.1")) return "gpt-4.1";
   if (normalized.includes("4o-mini")) return "gpt-4o-mini";
-  return "gpt-4o";
+  return "gpt-5-mini-2025-08-07";
 }
 
 function mapAnthropicModel(modelSelection: string): string {
   const normalized = modelSelection.toLowerCase().trim();
-  if (!normalized) return "claude-3-5-sonnet-20241022";
+  if (!normalized) return "claude-4.5-haiku";
   if (normalized.startsWith("claude-")) return normalized;
   if (normalized.includes("3.7") && normalized.includes("sonnet")) return "claude-3-7-sonnet-latest";
   if (normalized.includes("haiku")) return "claude-3-5-haiku-latest";
-  return "claude-3-5-sonnet-20241022";
+  return "claude-4.5-haiku";
 }
 
 function extractAnthropicText(response: unknown): string {
@@ -722,7 +722,7 @@ export async function POST(request: NextRequest) {
     const provider = normalizeProvider(toStringSafe(body.provider || body.engine || "Gemini"));
     const modelSelection =
       toStringSafe(body.model).trim() ||
-      (provider === "OpenAI" ? "gpt-4o" : provider === "Anthropic" ? "claude-3-5-sonnet-20241022" : "gemini-2.5-flash");
+      (provider === "OpenAI" ? "gpt-5-mini-2025-08-07" : provider === "Anthropic" ? "claude-4.5-haiku" : "gemini-3-flash-preview");
 
     // Select the API key from the database based on the active provider
     let analysisApiKey = "";
@@ -888,7 +888,7 @@ export async function POST(request: NextRequest) {
           const mimeType = imgRes.headers.get("content-type") || "image/jpeg";
 
           const visionAi = new GoogleGenerativeAI(analysisApiKey || "");
-          const visionModel = visionAi.getGenerativeModel({ model: "gemini-2.5-flash" });
+          const visionModel = visionAi.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
           const visionPrompt = `Analyze this video frame. Return a strict JSON object with these keys: { "lighting": "...", "setting": "...", "format": "..." }. Keep descriptions under 3 words (e.g., 'Dark/Moody', 'Car Interior', 'Talking Head'). Return ONLY valid JSON, no markdown fences.`;
 

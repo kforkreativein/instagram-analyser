@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const customDirectives = clientProfile?.customInstructions ? `=========================================================\n🔥 MASTER CLIENT OVERRIDE: STRICT PERSONA & RULES 🔥\nYou must absolutely embody the following persona and follow every single formatting rule, tone restriction, and output requirement listed below. This block supersedes all other tonal instructions:\n\n${clientProfile.customInstructions}\n=========================================================\n\n` : "";
 

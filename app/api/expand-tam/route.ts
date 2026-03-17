@@ -30,21 +30,21 @@ STRICT INSTRUCTION: Return ONLY the rewritten topic. No quotes, no conversationa
     if (provider === "OpenAI") {
       const openai = new OpenAI({ apiKey });
       const response = await openai.chat.completions.create({
-        model: model || "gpt-4o",
+        model: model || "gpt-5-mini-2025-08-07",
         messages: [{ role: "user", content: prompt }],
       });
       expandedTopic = response.choices[0]?.message?.content?.trim() ?? "";
     } else if (provider === "Anthropic") {
       const anthropic = new Anthropic({ apiKey });
       const response = await anthropic.messages.create({
-        model: model || "claude-3-5-sonnet-latest",
+        model: model || "claude-4.5-haiku",
         max_tokens: 200,
         messages: [{ role: "user", content: prompt }],
       });
       expandedTopic = (response.content[0] as any).text.trim();
     } else {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const geminiModel = genAI.getGenerativeModel({ model: model || "gemini-1.5-pro" });
+      const geminiModel = genAI.getGenerativeModel({ model: model || "gemini-3-flash-preview" });
       const response = await geminiModel.generateContent(prompt);
       expandedTopic = response.response.text().trim();
     }

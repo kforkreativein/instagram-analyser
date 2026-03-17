@@ -8,7 +8,7 @@ export const maxDuration = 300;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3-flash-preview";
 const TRANSCRIPTION_PROMPT =
   "You are an expert transcriber. Watch this video and provide a highly accurate, word-for-word transcript of the audio. Do not include any formatting, timestamps, speaker names, or descriptions of visuals. Return ONLY the spoken words.";
 
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
 
     const base64String = Buffer.from(videoBuffer).toString("base64");
-    const genAI = new GoogleGenerativeAI("AIzaSyCKvEm49jfoK-kzZDeT7w9FSA4pSLuIedk");
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
     const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
 
     const result = await model.generateContent([
