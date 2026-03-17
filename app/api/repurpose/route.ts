@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     if (!apiKey) return NextResponse.json({ error: "No API Key found" }, { status: 400 });
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
     const prompt = `Convert this video script into a highly engaging text post for ${platform}. Output raw text only. No markdown formatting. \n\nScript:\n${scriptText}`;
     

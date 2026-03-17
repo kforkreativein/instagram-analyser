@@ -736,7 +736,7 @@ export default function ChannelsDashboardPage() {
                 </div>
                 <h2 className="font-['Syne'] font-[800] text-3xl text-white tracking-tight">5x5 Master Consensus Grid</h2>
                 <p className="font-['DM_Sans'] text-sm text-[#8892A4] mt-1">
-                  The top 25 outliers across your entire intelligence network, ranked by viral magnitude.
+                  The top 25 outliers across your tracked channels. Click any card to reverse-engineer its script, analyze its pacing, or remix it for your own brand.
                 </p>
               </div>
               <button
@@ -752,19 +752,23 @@ export default function ChannelsDashboardPage() {
                 {(Array.isArray(masterGrid) ? masterGrid : []).map((post, idx) => (
                   <div
                     key={idx}
-                    className="relative aspect-[9/14] rounded-2xl overflow-hidden border border-white/5 group bg-black/40 hover:border-cyan-500/50 transition-all duration-300"
+                    onClick={() => router.push(`/videos/${post.id}`)}
+                    className="relative aspect-[9/14] rounded-2xl overflow-hidden border border-white/5 group bg-black/40 hover:border-cyan-500/50 transition-all duration-300 cursor-pointer"
                   >
                     <img
-                      src={post.thumbnailUrl || post.displayUrl || post.coverUrl}
-                      className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
-                      alt={post.fromUsername}
+                      src={post.displayUrl || post.thumbnailUrl || post.videoUrl || ""}
+                      alt="Viral Thumbnail"
                       referrerPolicy="no-referrer"
+                      className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
+                    {/* Fallback gradient if image fails */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0D1017] via-transparent to-transparent -z-10"></div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity"></div>
 
                     {/* Metrics Overlay */}
-                    <div className="absolute top-2 left-2 flex flex-col gap-1">
-                       <span className="bg-cyan-500 text-black font-bold font-['JetBrains_Mono'] text-[9px] px-2 py-0.5 rounded-full shadow-lg">
+                    <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+                      <span className="bg-cyan-500 text-black font-bold font-['JetBrains_Mono'] text-[9px] px-2 py-0.5 rounded-full shadow-lg">
                         #{idx + 1}
                       </span>
                       <span className="bg-pink-600 text-white font-bold font-['JetBrains_Mono'] text-[9px] px-2 py-0.5 rounded-full shadow-lg">
@@ -772,7 +776,14 @@ export default function ChannelsDashboardPage() {
                       </span>
                     </div>
 
-                    {/* Hover Overlay Content */}
+                    {/* Click-to-analyze hover overlay */}
+                    <div className="absolute inset-0 z-40 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 backdrop-blur-sm transition-all duration-200">
+                      <span className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-md text-white text-xs font-semibold drop-shadow-lg">
+                        ✦ Open Analysis
+                      </span>
+                    </div>
+
+                    {/* Hover caption/metrics */}
                     <div className="absolute inset-0 z-20 flex flex-col justify-end p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
                       <div className="space-y-1.5">
                         <p className="text-white text-[10px] font-medium line-clamp-2 leading-tight">
@@ -784,7 +795,7 @@ export default function ChannelsDashboardPage() {
                           </div>
                           <div className={`px-1.5 py-0.5 rounded text-[9px] font-black backdrop-blur-md border ${
                             (post.multiplier || post.outlierScore) >= 2.0 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50' :
-                            (post.multiplier || post.outlierScore) >= 1.0 ? 'bg-white/10 text-white border-white/20' : 
+                            (post.multiplier || post.outlierScore) >= 1.0 ? 'bg-white/10 text-white border-white/20' :
                             'bg-red-500/10 text-red-400 border-red-500/30'
                           }`}>
                             {(post.multiplier?.toFixed(1) || post.outlierScore?.toFixed(1))}x
@@ -792,12 +803,6 @@ export default function ChannelsDashboardPage() {
                         </div>
                       </div>
                     </div>
-                    
-                    <a 
-                      href={post.permalink}
-                      target="_blank"
-                      className="absolute inset-0 z-10"
-                    ></a>
                   </div>
                 ))}
               </div>

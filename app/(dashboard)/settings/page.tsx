@@ -81,6 +81,10 @@ export default function SettingsPage() {
   const { toast } = useToast();
 
   const [serverSavedKeys, setServerSavedKeys] = useState<Record<string, boolean>>({});
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({ current: "", new: "", confirm: "" });
+  const [passwordStatus, setPasswordStatus] = useState({ type: "", message: "" });
+  const [isChanging, setIsChanging] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -134,6 +138,40 @@ export default function SettingsPage() {
     }
   }, [activeProvider, activeModel]);
  
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordData.new !== passwordData.confirm) {
+      setPasswordStatus({ type: "error", message: "New passwords do not match." });
+      return;
+    }
+    if (passwordData.new.length < 8) {
+      setPasswordStatus({ type: "error", message: "Password must be at least 8 characters." });
+      return;
+    }
+
+    setIsChanging(true);
+    setPasswordStatus({ type: "", message: "" });
+
+    try {
+      const res = await fetch("/api/user/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: passwordData.current, newPassword: passwordData.new }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Failed to change password");
+
+      setPasswordStatus({ type: "success", message: "Password updated successfully!" });
+      setPasswordData({ current: "", new: "", confirm: "" });
+      setTimeout(() => setIsChangingPassword(false), 2000);
+    } catch (error: any) {
+      setPasswordStatus({ type: "error", message: error.message });
+    } finally {
+      setIsChanging(false);
+    }
+  };
+
   async function handleSave() {
     // Helper: strip out literal 'undefined' / 'null' strings before persisting
     const cleanKey = (val: string | null | undefined) =>
@@ -294,6 +332,71 @@ export default function SettingsPage() {
                   readOnly={true}
                   className={premiumFieldClassName + " opacity-60 cursor-not-allowed focus:border-transparent focus:ring-0"}
                 />
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-[rgba(255,255,255,0.05)]">
+                {!isChangingPassword ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsChangingPassword(true)}
+                    className="text-[12px] font-['DM_Sans'] text-[#8892A4] hover:text-white transition-colors flex items-center gap-2"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    Change Password
+                  </button>
+                ) : (
+                  <form onSubmit={handlePasswordChange} className="flex flex-col gap-4 bg-[rgba(0,0,0,0.2)] p-4 rounded-lg border border-[rgba(255,255,255,0.05)]">
+                    <h4 className="text-[13px] text-white font-medium mb-1">Update Password</h4>
+
+                    <input
+                      type="password"
+                      placeholder="Current Password"
+                      value={passwordData.current}
+                      onChange={(e) => setPasswordData({...passwordData, current: e.target.value})}
+                      className="w-full bg-[#111620] border border-[rgba(255,255,255,0.08)] rounded-md px-3 py-2 text-[13px] text-white focus:outline-none focus:border-[#FF3B57]"
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="New Password"
+                      value={passwordData.new}
+                      onChange={(e) => setPasswordData({...passwordData, new: e.target.value})}
+                      className="w-full bg-[#111620] border border-[rgba(255,255,255,0.08)] rounded-md px-3 py-2 text-[13px] text-white focus:outline-none focus:border-[#FF3B57]"
+                      required
+                    />
+                    <input
+                      type="password"
+                      placeholder="Confirm New Password"
+                      value={passwordData.confirm}
+                      onChange={(e) => setPasswordData({...passwordData, confirm: e.target.value})}
+                      className="w-full bg-[#111620] border border-[rgba(255,255,255,0.08)] rounded-md px-3 py-2 text-[13px] text-white focus:outline-none focus:border-[#FF3B57]"
+                      required
+                    />
+
+                    {passwordStatus.message && (
+                      <p className={`text-[12px] ${passwordStatus.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>
+                        {passwordStatus.message}
+                      </p>
+                    )}
+
+                    <div className="flex items-center gap-3 mt-2">
+                      <button
+                        type="submit"
+                        disabled={isChanging}
+                        className="px-4 py-2 bg-[rgba(255,255,255,0.1)] hover:bg-[rgba(255,255,255,0.15)] rounded-md text-[12px] text-white transition-all disabled:opacity-50"
+                      >
+                        {isChanging ? "Saving..." : "Save Password"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setIsChangingPassword(false); setPasswordStatus({ type: "", message: "" }); }}
+                        className="text-[12px] text-[#8892A4] hover:text-white transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
           </div>

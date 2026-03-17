@@ -84,10 +84,7 @@ export default function Topbar() {
 
                         <button
                             type="button"
-                            onClick={() => {
-                                sessionStorage.removeItem("homeState");
-                                router.push("/");
-                            }}
+                            onClick={() => { window.location.href = '/home'; }}
                             className="bg-[#FF3B57] text-white px-[16px] py-[8px] rounded-[8px] text-[12px] font-['DM_Sans'] font-[600] shadow-[0_0_20px_rgba(255,59,87,0.25)] transition-all hover:bg-[#ff2244] hover:shadow-[0_0_28px_rgba(255,59,87,0.4)] hover:-translate-y-[1px] cursor-pointer border-none"
                         >
                             + New Analysis

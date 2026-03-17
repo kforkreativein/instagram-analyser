@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3.1-pro-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const customDirectives = clientProfile?.customInstructions ? `=========================================================\n🔥 MASTER CLIENT OVERRIDE: STRICT PERSONA & RULES 🔥\nYou must absolutely embody the following persona and follow every single formatting rule, tone restriction, and output requirement listed below. This block supersedes all other tonal instructions:\n\n${clientProfile.customInstructions}\n=========================================================\n\n` : "";
 
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
         } else if (focusArea === 'structure') {
           systemPrompt = `${customDirectives}Restructure this script for better story flow: [HOOK] → [BODY] → [CALL TO ACTION]. Improve transitions between sections. Keep the core idea and language. Return ONLY the rewritten script.${criticalInstructions}\n\nScript:\n${script}`;
         } else {
-          systemPrompt = `${customDirectives}Rewrite this script for 10% more retention. Make it 100% natural and human. Remove all AI-typical phrases. Use the exact same language as the input. Return ONLY the rewritten script.${criticalInstructions}\n\nScript:\n${script}`;
+          systemPrompt = `${customDirectives}Rewrite this script for 10% more retention. Make it 100% natural and human. Remove all AI-typical phrases. Use the exact same language as the input. CRITICAL: You MUST keep all bracketed structure tags (e.g., [HOOK], [BODY], [CALL TO ACTION]) exactly as they appear in the original script. Do NOT remove or modify them. You MUST keep the exact same word count — do not shorten or lengthen the script. Only improve the vocabulary, flow, and hook impact. Return ONLY the rewritten script.${criticalInstructions}\n\nScript:\n${script}`;
         }
         break;
       case 'pacing':

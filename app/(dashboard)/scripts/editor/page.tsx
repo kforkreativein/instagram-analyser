@@ -793,33 +793,6 @@ function ScriptsPageContent() {
   const { toast } = useToast();
   const [copiedScript, setCopiedScript] = useState(false);
 
-  // Hydrate draft on mount
-  useEffect(() => {
-    const savedDraft = localStorage.getItem("outlier_script_draft");
-    if (savedDraft) {
-      try {
-        const parsed = JSON.parse(savedDraft);
-        if (parsed.topic) setTopic(parsed.topic);
-        if (parsed.scriptTitle) setScriptTitle(parsed.scriptTitle);
-        if (parsed.script) setScript(parsed.script);
-        if (parsed.selectedHookId) setSelectedHookId(parsed.selectedHookId);
-        if (parsed.selectedStyleId) setSelectedStyleId(parsed.selectedStyleId);
-        if (parsed.shockingFacts) setShockingFacts(parsed.shockingFacts);
-      } catch (e) { console.error("Failed to parse draft", e); }
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-save draft on every change
-  useEffect(() => {
-    localStorage.setItem("outlier_script_draft", JSON.stringify({
-      topic,
-      scriptTitle,
-      script,
-      selectedHookId,
-      selectedStyleId,
-      shockingFacts,
-    }));
-  }, [topic, scriptTitle, script, selectedHookId, selectedStyleId, shockingFacts]);
 
   const WRITING_MODES: { id: WritingMode; icon: string; label: string; placeholder: string }[] = [
     { id: "polisher", icon: "✍️", label: "The Polisher", placeholder: "Paste your clunky draft here..." },
@@ -1119,7 +1092,7 @@ function ScriptsPageContent() {
     })();
   }, [searchParams]);
 
-  // Debounced autosave
+  // Debounced autosave — saves all script fields to DB, no localStorage
   useEffect(() => {
     const effectiveId = searchParams?.get("id") || scriptId;
     if (!script && !scriptTitle) return;
@@ -1136,6 +1109,12 @@ function ScriptsPageContent() {
             content: script,
             clientId: selectedClientId,
             type: isRemixMode ? "Remix" : "Original",
+            hooks: abHooks.length > 0 ? abHooks : undefined,
+            caption: generatedCaption || undefined,
+            scriptJob: scriptJob || undefined,
+            directorsCut: directorsCutData || undefined,
+            prompts: promptDirectorData || undefined,
+            packaging: packagingData || undefined,
             updatedAt: new Date().toISOString(),
           }),
         });
@@ -1144,10 +1123,10 @@ function ScriptsPageContent() {
       } catch {
         setSaveStatus("idle");
       }
-    }, 1500);
+    }, 3000);
 
     return () => clearTimeout(saveTimer);
-  }, [scriptTitle, script, selectedClientId, scriptId, searchParams]);
+  }, [scriptTitle, script, selectedClientId, scriptId, searchParams, abHooks, generatedCaption, scriptJob, directorsCutData, promptDirectorData, packagingData]);
 
   useEffect(() => {
     const nextHookCards = buildHookCards();
@@ -3455,8 +3434,9 @@ LANGUAGE: ${activeLanguage}`;
                 body: JSON.stringify({ script, originalHook }) 
               })
                 .then(r => r.json())
-                .then(d => { 
+                .then(d => {
                   if (d.error) throw new Error(d.error);
+                  if (!d || !d.updatedScript) throw new Error("Invalid response from AI");
                   const newHook = d.updatedScript;
                   // Replace only the hook part if possible
                   if (hookMatch) {
@@ -3478,7 +3458,12 @@ LANGUAGE: ${activeLanguage}`;
             <button onClick={() => {
               setActiveAction('fix-structure');
               fetch("/api/fix-structure", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script }) })
-                .then(r => r.json()).then(d => { setScript(d.updatedScript || d.result); setImprovementLog(p => ["Story structure improved", ...p]); toast("success", "Structure Improved", ""); }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
+                .then(r => r.json()).then(d => {
+                  if (!d || (!d.updatedScript && !d.result)) throw new Error("Invalid response from AI");
+                  setScript(d.updatedScript || d.result);
+                  setImprovementLog(p => ["Story structure improved", ...p]);
+                  toast("success", "Structure Improved", "");
+                }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
             }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-orange-500/30 text-orange-400 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
               {activeAction === 'fix-structure' ? '⏳ Restructuring...' : '🏗 Fix Structure'}
             </button>
@@ -3966,7 +3951,7 @@ LANGUAGE: ${activeLanguage}`;
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start mt-[16px]">
           {/* A/B HOOK TESTING */}
-          <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-[rgba(255,255,255,0.1)] scrollbar-track-transparent pr-2">
+          <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col w-full min-h-[250px] max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-[rgba(255,255,255,0.1)] scrollbar-track-transparent pr-2">
             <div className="p-[14px_18px] border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between bg-[rgba(255,255,255,0.02)]">
               <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.1em] text-[#8892A4]">✦ Hook Variation Lab</span>
             </div>

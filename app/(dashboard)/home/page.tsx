@@ -488,41 +488,6 @@ function HomePageContent() {
   void batchResults;
   const [winningFormula, setWinningFormula] = useState("");
 
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    // Restore session memory
-    try {
-      const saved = sessionStorage.getItem("homeState");
-      if (saved) {
-        const parsed = JSON.parse(saved) as {
-          data?: InstagramOutlierResponse;
-          username?: string;
-          analysisMap?: Record<string, AnalyzeResponse>;
-        };
-        if (parsed.data) {
-          setData(parsed.data);
-          setHasSearched(true);
-        }
-        if (parsed.username) setUsername(parsed.username);
-        if (parsed.analysisMap) setAnalysisMap(parsed.analysisMap);
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }, []);
-
-  // Persist home state to sessionStorage
-  useEffect(() => {
-    if (typeof window === "undefined" || !data) return;
-    try {
-      sessionStorage.setItem("homeState", JSON.stringify({ data, username, analysisMap }));
-    } catch {
-      // Ignore storage quota errors
-    }
-  }, [data, username, analysisMap]);
 
   function saveFlatSettings() {
     // Settings no longer saved locally - backend handles API keys

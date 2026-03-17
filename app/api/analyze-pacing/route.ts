@@ -19,17 +19,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `${provider} API key is required` }, { status: 401 });
     }
 
+    const cleanTextForPacing = script.replace(/\[.*?\]/g, '').trim();
+
     const prompt = `You are a ruthless viral video editor analyzing a script for pacing and retention drops. You have two primary jobs:
 
 1. THE 30-SECOND JUSTIFICATION RULE: Analyze the first 60 words (approx. the first 30 seconds). Does the script explicitly justify WHY the viewer clicked and validate their attention? If it wanders, tell a slow story, or delays the context, you must flag the intro as "FAILED: Fails 30-Second Rule" and return the exact strings to cut.
-2. FLUFF REMOVAL: Scan the rest of the script. Identify any sentences that repeat information, introduce secondary/confusing ideas, or delay the primary payoff. 
+2. FLUFF REMOVAL: Scan the rest of the script. Identify any sentences that repeat information, introduce secondary/confusing ideas, or delay the primary payoff.
 
 Return an array of exact substrings that must be deleted to achieve maximum velocity and a 1-idea, 1-takeaway structure.
 
 SCRIPT:
-"${script}"
+"${cleanTextForPacing}"
 
-STRICT INSTRUCTION: Return a JSON array of EXACT substrings from the script that should be cut. Do not include any other text or markdown fences. 
+STRICT INSTRUCTION: Return a JSON array of EXACT substrings from the script that should be cut. Do not include any other text or markdown fences.
 Example: ["This is a repeated sentence.", "This part is fluff."]`;
 
     let generatedText = "";
@@ -51,7 +53,7 @@ Example: ["This is a repeated sentence.", "This part is fluff."]`;
       generatedText = (response.content[0] as any).text.trim();
     } else {
       const genAI = new GoogleGenerativeAI(apiKey);
-      const geminiModel = genAI.getGenerativeModel({ model: model || "gemini-1.5-pro" });
+      const geminiModel = genAI.getGenerativeModel({ model: model || "gemini-2.0-flash" });
       const response = await geminiModel.generateContent(prompt);
       generatedText = response.response.text().trim();
     }

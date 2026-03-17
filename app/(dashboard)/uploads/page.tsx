@@ -375,38 +375,43 @@ export default function UploadsPage() {
             {dbUploads.length === 0 ? (
               <p className="text-white/40 text-sm font-['DM_Sans']">No videos uploaded yet. Drop a file above to start.</p>
             ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6 w-full">
               {(Array.isArray(dbUploads) ? dbUploads : []).map((item: any) => (
-                <article 
-                  key={item.id} 
-                  onClick={() => router.push(`/videos/${item.id}`)} 
-                  className="group relative flex flex-col justify-end aspect-[9/16] rounded-[16px] overflow-hidden cursor-pointer border border-[rgba(255,255,255,0.08)] bg-[#0D1017] transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:-translate-y-1 hover:shadow-2xl w-full max-w-[320px] mx-auto"
+                <article
+                  key={item.id}
+                  onClick={() => router.push(`/videos/${item.id}`)}
+                  className="group relative flex flex-col justify-between aspect-[9/16] rounded-[16px] overflow-hidden cursor-pointer border border-[rgba(255,255,255,0.08)] bg-[#0D1017] transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:-translate-y-1 hover:shadow-2xl w-full"
                 >
-                  {/* THUMBNAIL / BACKGROUND OVERLAY */}
-                  <div className="absolute inset-0 z-0">
-                    <img 
-                      src={item.thumbnail || "/placeholder-image.jpg"} 
-                      alt={item.fileName}
-                      className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-300"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'; // Failsafe if image is broken
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0D1017] via-[#0D1017]/50 to-transparent"></div>
+                  {/* FIRST FRAME VIDEO THUMBNAIL */}
+                  <div className="absolute inset-0 z-0 bg-[#111620]">
+                    {item.thumbnail ? (
+                      <video
+                        src={`${item.thumbnail}#t=0.001`}
+                        preload="metadata"
+                        muted
+                        playsInline
+                        className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-300"
+                        onLoadedMetadata={(e) => {
+                          e.currentTarget.currentTime = 0.001;
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-white/10">No Media</div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0D1017] via-[#0D1017]/40 to-transparent"></div>
                   </div>
 
                   {/* TOP DATE BADGE */}
-                  <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md border border-white/10 rounded-md px-2 py-1 font-['JetBrains_Mono'] text-[10px] text-gray-300">
-                    {new Date(item.createdAt || Date.now()).toLocaleDateString()}
+                  <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md border border-white/10 rounded-md px-2 py-1 font-['JetBrains_Mono'] text-[10px] text-gray-300 pointer-events-none">
+                    Saved {new Date(item.createdAt || Date.now()).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
 
                   {/* BOTTOM INFO & BUTTON */}
-                  <div className="relative z-10 p-4 w-full flex flex-col gap-3">
+                  <div className="relative z-10 p-4 w-full flex flex-col gap-3 mt-auto bg-gradient-to-t from-[#0D1017] via-[#0D1017]/90 to-transparent">
                     <h3 className="font-['DM_Sans'] text-[14px] text-white font-medium line-clamp-2 drop-shadow-md">
                       {item.fileName || "Uploaded Video"}
                     </h3>
-                    
-                    <button className="w-full py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-white font-['DM_Sans'] text-[12px] font-medium transition-colors backdrop-blur-sm flex items-center justify-center gap-2">
+                    <button className="w-full py-2 bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.1)] rounded-lg text-white font-['DM_Sans'] text-[12px] font-medium transition-colors backdrop-blur-sm flex items-center justify-center gap-2">
                       ✦ Open Analysis
                     </button>
                   </div>
