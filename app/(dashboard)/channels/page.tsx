@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Sparkles } from "lucide-react";
 import { useToast } from "@/app/components/UI/Toast";
 import type { ScanProfileResponse } from "@/app/api/scan-profile/route";
@@ -58,6 +58,14 @@ function mergeOutlierFeed(existingFeed: FeedOutlier[], incomingOutliers: FeedOut
 export default function ChannelsDashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
+
+  const [feedFilters, setFeedFilters] = useState({
+    channel: "All",
+    minOutlier: "", maxOutlier: "",
+    minViews: "", maxViews: "",
+    minEngagement: "", maxEngagement: "",
+    daysAgo: ""
+  });
 
   // ── tracked channels ──────────────────────────────────────────
   const [watchlist, setWatchlist] = useState<WatchlistChannel[]>([]);
@@ -301,6 +309,37 @@ export default function ChannelsDashboardPage() {
     }
   }
 
+  const filteredMasterFeed = useMemo(() => {
+    return (newOutliers || []).filter(post => {
+      // 1. Channel Filter
+      if (feedFilters.channel !== "All" && post.fromUsername !== feedFilters.channel) return false;
+      
+      // 2. Outlier Score Filter
+      const score = post.outlierScore ?? post.multiplier ?? 0;
+      if (feedFilters.minOutlier && score < Number(feedFilters.minOutlier)) return false;
+      if (feedFilters.maxOutlier && score > Number(feedFilters.maxOutlier)) return false;
+      
+      // 3. Views Filter
+      if (feedFilters.minViews && (post.views || 0) < Number(feedFilters.minViews)) return false;
+      if (feedFilters.maxViews && (post.views || 0) > Number(feedFilters.maxViews)) return false;
+
+      // 4. Engagement Filter
+      const engagementRate = post.views > 0 ? (post.likes / post.views) * 100 : 0;
+      if (feedFilters.minEngagement && engagementRate < Number(feedFilters.minEngagement)) return false;
+      if (feedFilters.maxEngagement && engagementRate > Number(feedFilters.maxEngagement)) return false;
+
+      // 5. Time Filter
+      if (feedFilters.daysAgo) {
+        const postDate = new Date(post.postedAt || Date.now());
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - Number(feedFilters.daysAgo));
+        if (postDate < cutoffDate) return false;
+      }
+
+      return true;
+    });
+  }, [newOutliers, feedFilters]);
+
   async function handleScanTracked() {
     // Collect all unique usernames from all named watchlists
     const allUsernames = Array.from(
@@ -537,8 +576,59 @@ export default function ChannelsDashboardPage() {
                   📊 Export CSV
                 </button>
               </div>
+
+              <div className="mb-6 flex flex-wrap items-center gap-4 p-3 bg-[#0D1017] border border-[rgba(255,255,255,0.05)] rounded-lg font-['DM_Sans'] text-[12px]">
+                
+                {/* Channel Dropdown */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[#8892A4] uppercase tracking-wider text-[10px] font-bold">Channel</span>
+                  <select 
+                    className="bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded px-2 py-1.5 text-white focus:outline-none focus:border-[#FF3B57]"
+                    value={feedFilters.channel}
+                    onChange={(e) => setFeedFilters({...feedFilters, channel: e.target.value})}
+                  >
+                    <option value="All">All Channels</option>
+                    {Array.from(new Set((newOutliers || []).map(o => o.fromUsername))).sort().map(username => (
+                      <option key={username} value={username}>@{username}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Outlier Score Range */}
+                <div className="flex items-center gap-2 border-l border-[rgba(255,255,255,0.1)] pl-4">
+                  <span className="text-[#8892A4] uppercase tracking-wider text-[10px] font-bold">Outlier</span>
+                  <input type="number" placeholder="Min" value={feedFilters.minOutlier} onChange={(e) => setFeedFilters({...feedFilters, minOutlier: e.target.value})} className="w-14 bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded px-2 py-1 text-white text-center focus:outline-none focus:border-[#3BFFC8]" />
+                  <span className="text-[#8892A4]">-</span>
+                  <input type="number" placeholder="Max" value={feedFilters.maxOutlier} onChange={(e) => setFeedFilters({...feedFilters, maxOutlier: e.target.value})} className="w-14 bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded px-2 py-1 text-white text-center focus:outline-none focus:border-[#3BFFC8]" />
+                </div>
+
+                {/* Views Range */}
+                <div className="flex items-center gap-2 border-l border-[rgba(255,255,255,0.1)] pl-4">
+                  <span className="text-[#8892A4] uppercase tracking-wider text-[10px] font-bold">Views</span>
+                  <input type="number" placeholder="Min" value={feedFilters.minViews} onChange={(e) => setFeedFilters({...feedFilters, minViews: e.target.value})} className="w-20 bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded px-2 py-1 text-white text-center focus:outline-none focus:border-[#A78BFA]" />
+                  <span className="text-[#8892A4]">-</span>
+                  <input type="number" placeholder="Max" value={feedFilters.maxViews} onChange={(e) => setFeedFilters({...feedFilters, maxViews: e.target.value})} className="w-20 bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded px-2 py-1 text-white text-center focus:outline-none focus:border-[#A78BFA]" />
+                </div>
+
+                {/* Time Range */}
+                <div className="flex items-center gap-2 border-l border-[rgba(255,255,255,0.1)] pl-4">
+                  <span className="text-[#8892A4] uppercase tracking-wider text-[10px] font-bold">Posted In Last</span>
+                  <div className="flex items-center bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded overflow-hidden focus-within:border-[#FF3B57]">
+                    <input type="number" placeholder="0" value={feedFilters.daysAgo} onChange={(e) => setFeedFilters({...feedFilters, daysAgo: e.target.value})} className="w-12 bg-transparent px-2 py-1 text-white text-center focus:outline-none" />
+                    <span className="bg-[rgba(255,255,255,0.05)] px-2 py-1 text-[#8892A4] border-l border-[rgba(255,255,255,0.1)]">Days</span>
+                  </div>
+                </div>
+
+                {/* Clear Filters Button */}
+                <button 
+                  onClick={() => setFeedFilters({ channel: "All", minOutlier: "", maxOutlier: "", minViews: "", maxViews: "", minEngagement: "", maxEngagement: "", daysAgo: "" })}
+                  className="ml-auto text-[#FF3B57] hover:text-white transition-colors text-[11px] font-medium px-3 py-1 bg-[#FF3B57]/10 hover:bg-[#FF3B57]/20 rounded"
+                >
+                  Clear Filters
+                </button>
+              </div>
               <div className="grid gap-[16px] grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                {(Array.isArray(newOutliers) ? newOutliers : []).map((outlier) => (
+                {filteredMasterFeed.map((outlier) => (
                   <article key={`${outlier.fromUsername}-${outlier.id}`} className="relative group glass-surface rounded-[12px] overflow-hidden cursor-pointer transition-all duration-300 hover:border-pink-500/30 hover:shadow-[0_0_25px_rgba(236,72,153,0.12),0_16px_40px_rgba(0,0,0,0.4)] hover:-translate-y-[3px]">
                     {outlier.permalink ? (
                       <a

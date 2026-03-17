@@ -1395,14 +1395,7 @@ function HomePageContent() {
                   </section>
                 )}
               </div>
-            ) : (
-              <EmptyState
-                icon={<div className="text-[48px] opacity-20 select-none pointer-events-none">⬡</div>}
-                title="SaaS Intelligence Hub"
-                description="Paste a URL or search a username to discover viral outliers and generate high-performing scripts."
-                className="pt-[60px] pb-[120px]"
-              />
-            )}
+            ) : null}
           </div>
         </div>
         {/* Removed local vaultToast divider */}

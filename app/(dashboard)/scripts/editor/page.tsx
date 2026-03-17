@@ -650,17 +650,22 @@ function ScriptsPageContent() {
     const urlTitle = searchParams.get("title");
     if (urlTitle) {
       setScriptTitle(decodeURIComponent(urlTitle));
-    }
-
-    if (searchParams.get("mode") === "remix") {
+    }    if (searchParams.get("mode") === "remix" || searchParams.get("source") === "remix") {
       setCreationMode("remix");
+      setIsRemixMode(true);
+      setScriptType("REMIX");
       
-      const savedPayload = sessionStorage.getItem("pendingRemix");
+      const savedPayload = sessionStorage.getItem("pendingRemix") || localStorage.getItem("remix_data");
       if (savedPayload) {
         try {
-          const { transcript, analysis, suggestedName } = JSON.parse(savedPayload);
+          const parsed = JSON.parse(savedPayload);
+          const transcript = parsed.transcript || (parsed.post ? transcriptFromRemix(parsed) : "");
+          const analysis = parsed.analysis || parsed.originalAnalysis;
+          const suggestedName = parsed.suggestedName;
+
           if (transcript) setRemixTranscript(transcript);
           if (analysis) setOriginalAnalysis(analysis);
+          setRemixData(parsed);
 
           // Priority: suggestedName > URL title param > transcript fallback
           if (suggestedName) {
@@ -674,7 +679,7 @@ function ScriptsPageContent() {
           }
         } catch(e) {}
         
-        sessionStorage.removeItem("pendingRemix");
+        // session/local storage is handled by the component that redirected here
       }
     }
   }, [searchParams]);
@@ -792,6 +797,11 @@ function ScriptsPageContent() {
   const [videoLength, setVideoLength] = useState(60);
   const { toast } = useToast();
   const [copiedScript, setCopiedScript] = useState(false);
+  const [scriptType, setScriptType] = useState<"ORIGINAL" | "REMIX">("ORIGINAL");
+  const [researchData, setResearchData] = useState<any>(null);
+  const [selectedText, setSelectedText] = useState("");
+  const [inlineAICommand, setInlineAICommand] = useState("");
+  const [isProcessingInlineAI, setIsProcessingInlineAI] = useState(false);
 
 
   const WRITING_MODES: { id: WritingMode; icon: string; label: string; placeholder: string }[] = [
@@ -1108,7 +1118,7 @@ function ScriptsPageContent() {
             title: scriptTitle || "Untitled Script",
             content: script,
             clientId: selectedClientId,
-            type: isRemixMode ? "Remix" : "Original",
+            type: scriptType,
             hooks: abHooks.length > 0 ? abHooks : undefined,
             caption: generatedCaption || undefined,
             scriptJob: scriptJob || undefined,
@@ -1283,8 +1293,8 @@ function ScriptsPageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           selectedText: selection.text,
-          prompt: aiCommand.trim(),
-          fullContext: script,
+          promptCommand: aiCommand.trim(),
+          fullScript: script,
         }),
       });
 
@@ -1309,6 +1319,44 @@ function ScriptsPageContent() {
       toast("error", "Edit Failed", error.message);
     } finally {
       setIsApplyingAiEdit(false);
+    }
+  }
+
+  async function handleInlineAIEdit(command: string) {
+    if (!command.trim() || isProcessingInlineAI) return;
+    setIsProcessingInlineAI(true);
+    try {
+      const response = await fetch("/api/edit-selection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullScript: script,
+          selectedText: selectedText,
+          promptCommand: command
+        })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "AI Edit Failed");
+      }
+
+      const { replacement } = await response.json();
+      
+      if (selectedText) {
+        // Replace selection in the script
+        setScript(p => p.replace(selectedText, replacement));
+        setSelectedText("");
+      } else {
+        // Replace entire script
+        setScript(replacement);
+      }
+      toast("success", "Script Updated", "AI changes applied.");
+      setInlineAICommand("");
+    } catch (err: any) {
+      toast("error", "AI Error", err.message);
+    } finally {
+      setIsProcessingInlineAI(false);
     }
   }
 
@@ -1670,7 +1718,7 @@ function ScriptsPageContent() {
         id: (remixData as any)?.post?.id || `scr-${Date.now()}`,
         title: finalTitle,
         topic: topic,
-        type: creationMode === "remix" ? "Remix" : "Original",
+        type: scriptType,
         content: generatedText,
         caption: generatedCaption || null,
         repurposed: repurposedText || null,
@@ -1905,17 +1953,20 @@ function ScriptsPageContent() {
     if (!apiKey) return;
 
     const researchPrompt = `You are an expert investigative researcher. Topic: ${topic}. Provide a concise, high-impact "Executive Summary" of the latest advanced research, data points, and context for this topic. Output ONLY the summary text, no fluff.`;
+    const clientProfile = selectedClient ? `${selectedClient.name} (${selectedClient.niche})` : "General Creator";
 
     try {
       const resp = await fetch("/api/research", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, provider, apiKey, model }),
+        body: JSON.stringify({ topic, provider, apiKey, model, clientProfile }),
       });
 
       if (!resp.ok) return;
 
       const data = await resp.json();
+      setResearchData(data);
+
       if (data.facts && Array.isArray(data.facts)) {
         setShockingFacts(data.facts.sort((a: any, b: any) => b.score - a.score));
       }
@@ -1933,7 +1984,8 @@ function ScriptsPageContent() {
           blueprint: {
             ...(remixData.blueprint || {}),
             executiveSummary: summaryText,
-            transcript: remixData.blueprint?.transcript || ""
+            transcript: remixData.blueprint?.transcript || "",
+            keyFacts: data.keyFacts || [],
           } as RemixBlueprint
         });
       } else {
@@ -1948,7 +2000,7 @@ function ScriptsPageContent() {
             subject: topic,
             angle: "",
             payoff: "",
-            keyFacts: [],
+            keyFacts: data.keyFacts || [],
             preferredHookId: "",
             preferredStyleId: ""
           }
@@ -2840,97 +2892,60 @@ LANGUAGE: ${activeLanguage}`;
 
           {activeStep === 2 && (
             <div className="p-[18px]">
-              {!remixData?.blueprint?.executiveSummary && shockingFacts.length === 0 ? (
+              {researchData ? (
+                <div className="flex flex-col gap-6 bg-[#111620] border border-[rgba(255,255,255,0.05)] rounded-lg p-6">
+                  
+                  {/* Executive Summary */}
+                  <div>
+                    <h4 className="text-[13px] font-bold text-white mb-2 font-['DM_Sans']">Executive Summary</h4>
+                    <p className="text-[#8892A4] text-[13px] leading-relaxed font-['DM_Sans']">{researchData.executiveSummary}</p>
+                  </div>
+
+                  {/* How To Engage Viewers */}
+                  {(researchData.engagementAngles || researchData.engagementLines) && (
+                    <div>
+                      <h4 className="text-[13px] font-bold text-white mb-2 font-['DM_Sans']">How To Engage Viewers</h4>
+                      <ul className="list-disc pl-5 flex flex-col gap-2">
+                        {(researchData.engagementAngles || researchData.engagementLines || []).map((angle: string, i: number) => (
+                          <li key={i} className="text-[#8892A4] text-[13px] leading-relaxed font-['DM_Sans']">{angle}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Surprising Facts (Keeps your scoring system!) */}
+                  <div>
+                    <h4 className="text-[13px] font-bold text-white mb-2 font-['DM_Sans'] flex items-center gap-2">
+                      Surprising Facts <span className="text-[9px] bg-[#3BFFC8]/10 text-[#3BFFC8] px-2 py-0.5 rounded tracking-widest uppercase">VIRAL SCORED</span>
+                    </h4>
+                    <ul className="flex flex-col gap-3">
+                      {(researchData.facts || []).map((fact: any, i: number) => (
+                        <li key={i} className="flex gap-3 items-start bg-[rgba(255,255,255,0.02)] p-3 rounded-md border border-[rgba(255,255,255,0.03)]">
+                          <div className={`flex-shrink-0 flex items-center justify-center w-8 h-8 rounded text-[11px] font-bold ${fact.score >= 90 ? 'bg-[#FF3B57]/20 text-[#FF3B57]' : fact.score >= 80 ? 'bg-[#3BFFC8]/20 text-[#3BFFC8]' : 'bg-white/10 text-white'}`}>
+                            {fact.score}
+                          </div>
+                          <p className="text-[#8892A4] text-[13px] leading-relaxed font-['DM_Sans']">{fact.statement}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {/* Contrast Moments */}
+                  {researchData.contrastMoments && (
+                    <div>
+                      <h4 className="text-[13px] font-bold text-white mb-2 font-['DM_Sans']">Contrast Moments</h4>
+                      <ul className="list-disc pl-5 flex flex-col gap-2">
+                        {researchData.contrastMoments.map((moment: string, i: number) => (
+                          <li key={i} className="text-[#8892A4] text-[13px] leading-relaxed font-['DM_Sans']">{moment}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-emerald-500/50 border border-dashed border-emerald-500/20 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/10 transition-colors">
                   <span className="text-sm font-medium">Research will appear here after you save your topic.</span>
                 </div>
-              ) : (
-                <>
-                  <div className="mb-[20px]">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-[16px] mb-[16px]">
-                      <div className="flex flex-col">
-                        <h3 className="font-['Syne'] font-[700] text-[13px] text-[#F0F2F7] flex items-center gap-[8px]">
-                          Shocking Facts Engine
-                          <div className="flex items-center gap-[6px] text-[#A78BFA] bg-[rgba(167,139,250,0.1)] px-[8px] py-[3px] rounded-full border border-[rgba(167,139,250,0.2)]">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                            <span className="font-['JetBrains_Mono'] text-[9px] font-[600] uppercase">Use Angles 70+ for Viral Potential</span>
-                          </div>
-                        </h3>
-                      </div>
-                      
-                      {/* Topic Addressable Market Dial */}
-                      {shockingFacts.length > 0 && (
-                        <div className="flex items-center gap-[12px] bg-[rgba(17,22,32,0.6)] border border-[rgba(255,255,255,0.05)] rounded-[8px] p-[8px_12px]">
-                          <div className="relative w-[36px] h-[36px]">
-                            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
-                              <circle cx="18" cy="18" r="16" fill="none" className="stroke-[#111620]" strokeWidth="4" />
-                              <circle 
-                                cx="18" cy="18" r="16" fill="none" 
-                                className="stroke-[#3bf6ff]" strokeWidth="4" 
-                                strokeDasharray="100" 
-                                strokeDashoffset={100 - (Math.max(...shockingFacts.map(f => f.score)) || 0)} 
-                                strokeLinecap="round" 
-                              />
-                            </svg>
-                            <div className="absolute inset-0 flex items-center justify-center font-['JetBrains_Mono'] text-[10px] font-[700] text-[#F0F2F7]">
-                              {Math.max(...shockingFacts.map(f => f.score)) || 0}
-                            </div>
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.05em] text-[#8892A4]">Addressable Market</span>
-                            <span className="font-['DM_Sans'] text-[11px] font-[500] text-[#F0F2F7]">Max Viral Potential</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    {shockingFacts.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px]">
-                        {shockingFacts.map((factItem, i) => {
-                          const isSelected = selectedAngle?.statement === factItem.statement;
-                          let glowClass = "border-gray-500/30 text-gray-400";
-                          let label = "LOW";
-                          if (factItem.score >= 80) {
-                            glowClass = "border-[rgba(59,255,200,0.4)] shadow-[0_0_15px_rgba(59,255,200,0.15)] text-[#3BFFC8]";
-                            label = "VIRAL";
-                          } else if (factItem.score >= 66) {
-                            glowClass = "border-[rgba(59,130,246,0.4)] shadow-[0_0_10px_rgba(59,130,246,0.15)] text-[#3bf6ff]";
-                            label = "HIGH";
-                          } else if (factItem.score >= 41) {
-                            glowClass = "border-[rgba(250,204,21,0.4)] shadow-[0_0_8px_rgba(250,204,21,0.1)] text-[#fbbf24]";
-                            label = "MEDIUM";
-                          }
-                          return (
-                            <div 
-                              key={i} 
-                              onClick={() => setSelectedAngle(factItem)}
-                              className={`p-[14px] rounded-[10px] cursor-pointer transition-all border bg-[rgba(17,22,32,0.8)] hover:bg-[#111620] flex flex-col justify-between
-                                ${isSelected ? 'ring-2 ring-white/50 bg-[rgba(255,255,255,0.05)] ' : ''} ${glowClass}`}
-                            >
-                              <p className="font-['DM_Sans'] text-[13px] text-[#F0F2F7] leading-[1.5] mb-[12px]">{factItem.statement}</p>
-                              <div className="flex items-center justify-between">
-                                <span className="font-['JetBrains_Mono'] text-[10px] font-[600] opacity-80 uppercase">{label} SCORE</span>
-                                <div className="flex items-center gap-[8px]">
-                                  <div className="relative w-[30px] h-[30px] rounded-full border border-current flex items-center justify-center">
-                                    <span className="font-['JetBrains_Mono'] text-[11px] font-[700]">{factItem.score}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-[#8892A4] text-[12px] italic">No facts generated yet.</div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between mb-[6px]">
-                    <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.1em] text-[#5A6478]">EXECUTIVE SUMMARY</span>
-                  </div>
-                  <div className="font-['DM_Sans'] text-[12.5px] leading-[1.65] text-[#8892A4] bg-[#111620] rounded-[8px] p-[12px] border border-[rgba(255,255,255,0.03)]">
-                    {remixData?.blueprint?.executiveSummary || "Summary not available."}
-                  </div>
-                </>
               )}
               <div className="flex justify-end mt-[16px]">
                 <button onClick={() => setActiveStep(3)} className="bg-[#3BFFC8] text-[#080A0F] p-[8px_16px] rounded-[8px] font-['DM_Sans'] text-[12.5px] cursor-pointer font-[600] border border-[rgba(59,255,200,0.2)] hover:opacity-90 transition-colors">
@@ -2940,7 +2955,6 @@ LANGUAGE: ${activeLanguage}`;
             </div>
           )}
         </section>
-
         </>
         )}
 
@@ -3305,8 +3319,35 @@ LANGUAGE: ${activeLanguage}`;
             <div className="flex justify-between items-center mb-[12px]">
               <span className="font-['Syne'] font-[700] text-[10px] text-[#5A6478] uppercase tracking-[0.1em]">Script Output</span>
               {script.trim() && (
-                <div className={`p-[4px_10px] rounded-full text-[10px] font-bold font-['DM_Sans'] transition-all ${estimatedSeconds > videoLength * 1.15 ? 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
-                  {estimatedSeconds > videoLength * 1.15 ? `⚠️ Too long (${estimatedSeconds}s)` : `Pacing: ${estimatedSeconds}s`}
+                <div className="flex items-center gap-2">
+                  <div className={`text-[10px] font-bold px-2 py-1 rounded transition-all ${estimatedSeconds > videoLength * 1.15 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'}`}>
+                    Pacing: {estimatedSeconds}s
+                  </div>
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(script);
+                      toast("success", "Copied", "Script copied to clipboard");
+                    }} 
+                    className="p-1.5 hover:bg-white/10 rounded text-[#8892A4] hover:text-white transition" 
+                    title="Copy Script"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
+                  <button 
+                    onClick={() => {
+                      const blob = new Blob([script], { type: 'text/plain' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `${scriptTitle || 'script'}.txt`;
+                      a.click();
+                      toast("success", "Downloaded", "Script downloaded as .txt");
+                    }} 
+                    className="p-1.5 hover:bg-white/10 rounded text-[#8892A4] hover:text-white transition" 
+                    title="Download .txt"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               )}
             </div>
@@ -3387,6 +3428,7 @@ LANGUAGE: ${activeLanguage}`;
                   const target = e.currentTarget;
                   const start = target.selectionStart;
                   const end = target.selectionEnd;
+                  // Handle selection for floating toolbar
                   if (start !== end) {
                     const text = script.substring(start, end);
                     setSelection({
@@ -3397,14 +3439,54 @@ LANGUAGE: ${activeLanguage}`;
                       y: e.clientY,
                       rect: target.getBoundingClientRect()
                     });
-                  } else if (!showAskInput) {
-                    setSelection(null);
+                    setSelectedText(text); // Track for sticky command bar
+                  } else {
+                    if (!showAskInput) setSelection(null);
+                    setSelectedText(""); // Clear if click away
                   }
                 }}
                 placeholder="Your viral script will appear here..."
-                className="min-h-[500px] w-full bg-transparent p-8 font-['DM_Sans'] text-[15px] leading-[1.7] text-gray-200 outline-none focus:outline-none whitespace-pre-wrap resize-none scrollbar-hide"
+                className="min-h-[500px] w-full bg-transparent p-8 pb-20 font-['DM_Sans'] text-[15px] leading-[1.7] text-gray-200 outline-none focus:outline-none whitespace-pre-wrap resize-none scrollbar-hide"
                 spellCheck={false}
               />
+
+              {/* Sticky AI Command Bar */}
+              <div className="absolute bottom-0 left-0 right-0 p-3 bg-[#111620] border-t border-[rgba(255,255,255,0.05)] rounded-b-[14px] z-10">
+                {selectedText && (
+                  <div className="mb-2 flex items-center justify-between animate-in slide-in-from-bottom-2 duration-200">
+                    <p className="text-[11px] text-[#A78BFA] font-['DM_Sans'] line-clamp-1 border-l-2 border-[#A78BFA] pl-2">
+                      <span className="font-bold opacity-70 mr-1">Editing:</span> "{selectedText}"
+                    </p>
+                    <button onClick={() => setSelectedText("")} className="text-[#8892A4] hover:text-white text-[10px]">✕ Clear</button>
+                  </div>
+                )}
+                <div className="flex gap-2 relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8892A4]">
+                    {isProcessingInlineAI ? (
+                      <div className="animate-spin rounded-full h-3.5 w-3.5 border-t-2 border-[#3BFFC8] border-opacity-50"></div>
+                    ) : (
+                      "✨"
+                    )}
+                  </div>
+                  <input 
+                    type="text" 
+                    value={inlineAICommand}
+                    onChange={(e) => setInlineAICommand(e.target.value)}
+                    placeholder={selectedText ? "What changes would you like to make to this selection?" : "Ask AI to rewrite the entire script..."}
+                    className="w-full bg-[#0D1017] border border-[rgba(255,255,255,0.08)] rounded-md py-2 pl-9 pr-4 text-[13px] text-white focus:outline-none focus:border-[#3BFFC8]/50 font-['DM_Sans'] transition-colors"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleInlineAIEdit(inlineAICommand);
+                    }}
+                  />
+                  <button 
+                    onClick={() => handleInlineAIEdit(inlineAICommand)}
+                    disabled={isProcessingInlineAI || !inlineAICommand.trim()}
+                    className="bg-[#3BFFC8]/10 text-[#3BFFC8] px-3 py-1.5 rounded-md text-[12px] font-bold hover:bg-[#3BFFC8]/20 transition-colors disabled:opacity-50"
+                  >
+                    ↵
+                  </button>
+                </div>
+              </div>
             </div>
 
 
@@ -3681,7 +3763,7 @@ LANGUAGE: ${activeLanguage}`;
               </h3>
               <button onClick={() => setImagePrompts(null)} className="text-[10px] text-white/30 hover:text-white/60 transition-colors">✕ Clear</button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[350px] overflow-y-auto pr-2 custom-scrollbar">
               {imagePrompts.flatMap((item: any, i: number) => [
                 <div key={`img-${i}`} className="bg-[#111620] border border-[rgba(255,255,255,0.05)] rounded-lg p-4 relative group hover:border-[#3BFFC8]/30 transition-colors">
                   <span className="absolute top-3 right-3 text-[10px] font-['JetBrains_Mono'] text-[#8892A4] bg-black/50 px-2 py-1 rounded">IMAGE</span>

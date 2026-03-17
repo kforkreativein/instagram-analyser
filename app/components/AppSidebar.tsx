@@ -79,7 +79,7 @@ export default function AppSidebar() {
           <img
             src="/branding/full-logo.png"
             alt="Outlier Studio"
-            className="w-auto h-[42px] object-contain"
+            className="w-[160px] h-auto object-contain"
           />
         </Link>
       </div>

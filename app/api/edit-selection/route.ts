@@ -11,10 +11,10 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     try {
-        const { selectedText, prompt, fullContext } = await request.json();
+        const { fullScript, selectedText, promptCommand } = await request.json();
 
-        if (!selectedText || !prompt) {
-            return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+        if (!promptCommand) {
+            return NextResponse.json({ error: "Missing required promptCommand" }, { status: 400 });
         }
 
         const dbSettings = await getSettings(session.user.id);
@@ -27,7 +27,16 @@ export async function POST(request: NextRequest) {
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-        const systemPrompt = `You are a script editor. The user wants to change this specific text: '${selectedText}'. Their instruction is: '${prompt}'. Rewrite ONLY the selected text based on the instruction. Do not return the surrounding context, only the replacement text.`;
+        const systemPrompt = `You are an elite script editor. 
+Context (Full Script): "${fullScript}"
+Target Text to Edit: "${selectedText || fullScript}"
+User Command: "${promptCommand}"
+
+Execute the user command on the Target Text. 
+CRITICAL RULES:
+1. Return ONLY the final edited text. 
+2. DO NOT include quotes, markdown formatting, or introductory phrases like "Here is the rewrite".
+3. If the user only selected a specific sentence, rewrite ONLY that sentence so it flows perfectly back into the context.`;
 
         const result = await model.generateContent(systemPrompt);
         const replacement = result.response.text().trim().replace(/^["']|["']$/g, '');

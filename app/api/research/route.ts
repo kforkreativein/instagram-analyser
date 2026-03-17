@@ -14,6 +14,7 @@ export async function POST(request: NextRequest) {
             provider?: string;
             apiKey?: string;
             model?: string;
+            clientProfile?: string;
         };
 
         const topic = (body.topic || "").trim();
@@ -29,24 +30,20 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: true, message: `${provider} API key is required.` }, { status: 401 });
         }
 
-        const systemPrompt = `You are an elite researcher for viral short-form content. 
-    Topic: ${topic}
+        const clientProfile = body.clientProfile || "General Creator";
 
-    You MUST return a STRICT JSON object with exactly three keys: "title", "executiveSummary", and "facts".
-    
-    1. "title": A punchy, highly clickable 3-to-5 word title for this script (e.g., "The Sleep Jetlag Killer").
-    2. "executiveSummary": A dense, highly informative paragraph summarizing the core mechanics of the topic.
-    3. "facts": An array of 3 to 5 shocking facts. Each fact is an object: { "statement": "...", "score": 95 }.
+        const systemPrompt = `You are an elite research strategist for short-form video.
+Topic: ${topic}
+Target Client/Brand Profile: ${clientProfile}
 
-    Format exactly like this:
-    {
-      "title": "Your Short Title",
-      "executiveSummary": "Your paragraph...",
-      "facts": [
-        { "statement": "The first shocking fact...", "score": 88 },
-        { "statement": "The second shocking fact...", "score": 95 }
-      ]
-    }`;
+Analyze the topic specifically through the lens of the Target Client Profile. You MUST return a STRICT JSON object with these keys:
+1. "title": A highly clickable 3-to-5 word title.
+2. "executiveSummary": A dense, 2-sentence summary of the core thesis.
+3. "engagementAngles": An array of 2 string bullet points on 'How To Engage Viewers' (e.g., specific hooks, mysteries to open with, or relatable analogies).
+4. "facts": An array of 3 to 4 surprising facts. Each must be an object: { "statement": "The fact...", "score": 95 }. Score based on viral potential.
+5. "contrastMoments": An array of 2 string bullet points highlighting a 'Myth vs Reality' or 'Common Belief vs Truth' related to the topic.
+
+Format EXACTLY as valid JSON.`;
 
         let generatedText = "";
 

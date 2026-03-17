@@ -177,6 +177,7 @@ export interface HookAnalysis {
   frameworks: string[];
   justification: string;
   visual_hook?: string;
+  formula?: string;
 }
 
 export interface StructureAnalysis {
@@ -216,12 +217,16 @@ export interface DeepAnalysis {
     seed: string;
     substance: string;
     storyStructure: string;
+    uniqueAngle?: string;
+    commonBelief?: string;
+    supportingEvidence?: string[];
   };
   hooks: {
     spokenHook: string;
     visualHook: string;
     textHook: string;
     hookType: string;
+    formula?: string;
   };
   architecture: {
     visualLayout: string;

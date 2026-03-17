@@ -266,16 +266,22 @@ function buildUniversalSystemPrompt(transcriptText: string): string {
 The JSON must exactly match this structure:
 {
   "narrative": {
-    "topic": "The broad subject matter.",
-    "seed": "A 1-line sentence about what makes this specific video interesting.",
-    "substance": "The core facts, examples, or main takeaway.",
-    "storyStructure": "MUST BE EXACTLY ONE OF: Problem/Solution, Contrarian, Listicle, Story/Vlog, Step-by-Step"
+    "topic": "The core subject matter (1-3 words).",
+    "seed": "A 1-sentence summary of the core video concept.",
+    "substance": "A brief summary of what is actually discussed.",
+    "storyStructure": "MUST BE EXACTLY ONE OF: Problem/Solution, Contrarian, Listicle, Story/Vlog, Step-by-Step",
+    "uniqueAngle": "What is the specific, unique perspective or framing the creator uses to introduce this topic? (e.g., 'Open with a dramatic confrontation to introduce a lesson...')",
+    "commonBelief": "What widespread myth, assumption, or common belief is this video explicitly or implicitly challenging?",
+    "supportingEvidence": [
+      "Provide 2-3 bullet points of specific evidence, visual proof, or logical arguments the creator uses in the video to back up their unique angle."
+    ]
   },
   "hooks": {
     "spokenHook": "The exact first words spoken in the video.",
     "visualHook": "What grabs the eye in the first 3 seconds.",
     "textHook": "The on-screen text used to stop the scroll.",
-    "hookType": "MUST BE EXACTLY ONE OF: Negative Hook, Curiosity Hook, Value Hook, Story Hook, Visual Hook, Question Hook, Direct Hook, Empathy Hook, Statistic Hook"
+    "hookType": "MUST BE EXACTLY ONE OF: Negative Hook, Curiosity Hook, Value Hook, Story Hook, Visual Hook, Question Hook, Direct Hook, Empathy Hook, Statistic Hook",
+    "formula": "Extract the core psychological template of the spoken hook using bracketed variables. Example: '[Subject] is not [Common Belief], it is [Surprising Truth].' or 'How I used [Unconventional Method] to achieve [Desirable Result].'"
   },
   "architecture": {
     "visualLayout": "How the screen is arranged (e.g., split-screen, green screen, dynamic zoom, talking head).",
@@ -315,6 +321,7 @@ function normalizeUniversalAnalysisShape(payload: UnknownRecord, transcriptText:
         visual_hook: toStringSafe(hooks.visualHook, ""),
         frameworks: [],
         justification: toStringSafe(hooks.spokenHook, "Generated from transcript."),
+        formula: toStringSafe(hooks.formula, ""),
       },
       structureAnalysis: {
         type: toStringSafe(narrative.format, "Hook -> Value -> CTA"),
@@ -366,6 +373,7 @@ function normalizeUniversalAnalysisShape(payload: UnknownRecord, transcriptText:
       visual_hook: visualHook,
       frameworks,
       justification: hookDescription || "Generated from transcript.",
+      formula: toStringSafe(hookObj.formula, ""),
     },
     structureAnalysis: {
       type: structureType,
@@ -396,12 +404,16 @@ function extractDeepAnalysis(payload: UnknownRecord): DeepAnalysis | null {
       seed: toStringSafe(narrative.seed, "Not analyzed"),
       substance: toStringSafe(narrative.substance, "Not analyzed"),
       storyStructure: toStringSafe(narrative.storyStructure, toStringSafe(narrative.format, "Not analyzed")),
+      uniqueAngle: toStringSafe(narrative.uniqueAngle, ""),
+      commonBelief: toStringSafe(narrative.commonBelief, ""),
+      supportingEvidence: Array.isArray(narrative.supportingEvidence) ? narrative.supportingEvidence.map(String) : [],
     },
     hooks: {
       spokenHook: toStringSafe(hooks.spokenHook, "Not analyzed"),
       visualHook: toStringSafe(hooks.visualHook, "Not analyzed"),
       textHook: toStringSafe(hooks.textHook, "Not analyzed"),
       hookType: toStringSafe(hooks.hookType, toStringSafe(hooks.type, "Not analyzed")),
+      formula: toStringSafe(hooks.formula, "Not analyzed"),
     },
     architecture: {
       visualLayout: toStringSafe(architecture.visualLayout, "Not analyzed"),

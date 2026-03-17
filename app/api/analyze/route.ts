@@ -306,6 +306,7 @@ function normalizeUniversalAnalysisShape(payload: UnknownRecord, transcriptText:
         visual_hook: toStringSafe(hooks.visualHook, ""),
         frameworks: [],
         justification: toStringSafe(hooks.spokenHook, "Generated from transcript."),
+        formula: toStringSafe(hooks.formula, ""),
       },
       structureAnalysis: {
         type: toStringSafe(narrative.storyStructure, "Problem Solver"),
@@ -356,6 +357,7 @@ function normalizeUniversalAnalysisShape(payload: UnknownRecord, transcriptText:
       visual_hook: visualHook,
       frameworks,
       justification: hookDescription || "Generated from transcript.",
+      formula: toStringSafe(hookObj.formula, ""),
     },
     structureAnalysis: {
       type: structureType,
@@ -460,14 +462,20 @@ function buildUniversalSystemPrompt(transcriptText: string): string {
     "spokenHook": "The exact first words spoken in the video.",
     "visualHook": "What grabs the eye in the first 3 seconds.",
     "textHook": "The on-screen text used to stop the scroll.",
-    "hookType": "STRICT HOOK CATEGORIZATION: For the 'hookType' field, you are FORBIDDEN from using generic terms like \\"Curiosity\\", \\"Statement\\", or \\"Question\\". You MUST categorize the spoken hook using ONLY one of the following exact 10 strings: [\\"Secret Reveal\\", \\"Contrarian\\", \\"Problem Hook\\", \\"Question Hook\\", \\"Case Study\\", \\"Education Hook\\", \\"List Hook\\", \\"Comparison Hook\\", \\"Personal Experience\\", \\"The Viral Stack\\"] If it does not perfectly fit one, pick the closest match from this exact list. Do not invent new categories."
+    "hookType": "STRICT HOOK CATEGORIZATION: For the 'hookType' field, you are FORBIDDEN from using generic terms like \\"Curiosity\\", \\"Statement\\", or \\"Question\\". You MUST categorize the spoken hook using ONLY one of the following exact 10 strings: [\\"Secret Reveal\\", \\"Contrarian\\", \\"Problem Hook\\", \\"Question Hook\\", \\"Case Study\\", \\"Education Hook\\", \\"List Hook\\", \\"Comparison Hook\\", \\"Personal Experience\\", \\"The Viral Stack\\"] If it does not perfectly fit one, pick the closest match from this exact list. Do not invent new categories.",
+    "formula": "Extract the core psychological template of the spoken hook using bracketed variables. Example: '[Subject] is not [Common Belief], it is [Surprising Truth].' or 'How I used [Unconventional Method] to achieve [Desirable Result].'"
   },
 
   "narrative": {
-    "topic": "The broad subject matter.",
-    "seed": "A 1-line sentence about what makes this specific video interesting.",
-    "substance": "The core facts, examples, or main takeaway.",
-    "storyStructure": "Select EXACTLY one from: [Breakdown, Newscaster, Case Study, Listicle, Problem Solver, Tutorial, Educational]"
+    "topic": "The core subject matter (1-3 words).",
+    "seed": "A 1-sentence summary of the core video concept.",
+    "substance": "A brief summary of what is actually discussed.",
+    "storyStructure": "STRICT NARRATIVE CATEGORIZATION: For the 'storyStructure' field, you are FORBIDDEN from using generic terms like \"Linear\", \"Educational\", or \"Vlog\". You MUST categorize the story structure using ONLY one of the following exact 10 strings: [\"Problem/Solution\", \"The Pivot\", \"Case Study\", \"Listicle\", \"Vulnerability-Led\", \"Myth-Buster\", \"Direct-to-Camera\", \"B-Roll Only\", \"Tutorial Step-by-Step\", \"The Transformation Loop\"] If it does not perfectly fit one, pick the closest match from this exact list. Do not invent new categories.",
+    "uniqueAngle": "What is the specific, unique perspective or framing the creator uses to introduce this topic? (e.g., 'Open with a dramatic confrontation to introduce a lesson...')",
+    "commonBelief": "What widespread myth, assumption, or common belief is this video explicitly or implicitly challenging?",
+    "supportingEvidence": [
+      "Provide 2-3 bullet points of specific evidence, visual proof, or logical arguments the creator uses in the video to back up their unique angle."
+    ]
   },
 
   "architecture": {
@@ -510,12 +518,16 @@ function extractDeepAnalysis(payload: UnknownRecord): DeepAnalysis | null {
       seed: toStringSafe(narrative.seed, "Not analyzed"),
       substance: toStringSafe(narrative.substance, "Not analyzed"),
       storyStructure: toStringSafe(narrative.storyStructure, "Not analyzed"),
+      uniqueAngle: toStringSafe(narrative.uniqueAngle, ""),
+      commonBelief: toStringSafe(narrative.commonBelief, ""),
+      supportingEvidence: Array.isArray(narrative.supportingEvidence) ? narrative.supportingEvidence.map(String) : [],
     },
     hooks: {
       spokenHook: toStringSafe(hooks.spokenHook, "Not analyzed"),
       visualHook: toStringSafe(hooks.visualHook, "Not analyzed"),
       textHook: toStringSafe(hooks.textHook, "Not analyzed"),
       hookType: toStringSafe(hooks.hookType, "Not analyzed"),
+      formula: toStringSafe(hooks.formula, "Not analyzed"),
     },
     architecture: {
       visualLayout: toStringSafe(architecture.visualLayout, "Not analyzed"),

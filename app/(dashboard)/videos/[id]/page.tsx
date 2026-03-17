@@ -653,6 +653,16 @@ export default function VideoAnalysisPage() {
                         <span className="px-3 py-1 bg-red-500/20 text-red-300 font-bold rounded-full border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.5)] text-[11px] uppercase tracking-wider">{analysisPayload.deepAnalysis.hooks.hookType || "Analyzing..."}</span>
                       </div>
                       <div className="space-y-4">
+                        {analysisPayload.deepAnalysis.hooks.formula && (
+                          <div className="flex items-start gap-3 mb-4 bg-[#A78BFA]/5 border border-[#A78BFA]/20 p-3 rounded-md">
+                            <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-[#A78BFA]/20 text-[#A78BFA] tracking-wider uppercase shrink-0">
+                              FORMULA
+                            </span>
+                            <p className="text-[#A78BFA] text-[13px] font-['DM_Sans'] leading-relaxed italic">
+                              {analysisPayload.deepAnalysis.hooks.formula}
+                            </p>
+                          </div>
+                        )}
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
                           <span className="text-[10px] uppercase font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded-md mr-2">Spoken</span>
                           {analysisPayload.deepAnalysis.hooks.spokenHook}
@@ -687,6 +697,52 @@ export default function VideoAnalysisPage() {
                           <span className="text-[10px] uppercase font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md mr-2">Substance</span>
                           {analysisPayload.deepAnalysis.narrative.substance}
                         </div>
+
+                        {/* Unique Angle */}
+                        {analysisPayload.deepAnalysis.narrative.uniqueAngle && (
+                          <div className="mt-5 pt-5 border-t border-[rgba(255,255,255,0.05)]">
+                            <div className="flex items-start gap-3">
+                              <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 tracking-wider uppercase shrink-0">
+                                UNIQUE ANGLE
+                              </span>
+                              <p className="text-[#8892A4] text-[13px] font-['DM_Sans'] leading-relaxed">
+                                {analysisPayload.deepAnalysis.narrative.uniqueAngle}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Common Belief to Challenge */}
+                        {analysisPayload.deepAnalysis.narrative.commonBelief && (
+                          <div className="mt-4">
+                            <div className="flex items-start gap-3">
+                              <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 tracking-wider uppercase shrink-0">
+                                COMMON BELIEF
+                              </span>
+                              <p className="text-[#8892A4] text-[13px] font-['DM_Sans'] leading-relaxed">
+                                {analysisPayload.deepAnalysis.narrative.commonBelief}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Supporting Evidence */}
+                        {analysisPayload.deepAnalysis.narrative.supportingEvidence && analysisPayload.deepAnalysis.narrative.supportingEvidence.length > 0 && (
+                          <div className="mt-4">
+                            <div className="flex items-start gap-3">
+                              <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 tracking-wider uppercase shrink-0">
+                                EVIDENCE
+                              </span>
+                              <ul className="flex flex-col gap-2 w-full">
+                                {analysisPayload.deepAnalysis.narrative.supportingEvidence.map((point: string, idx: number) => (
+                                  <li key={idx} className="text-[#8892A4] text-[13px] font-['DM_Sans'] leading-relaxed pl-3 relative before:content-['•'] before:absolute before:left-0 before:text-emerald-500">
+                                    {point}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -730,6 +786,16 @@ export default function VideoAnalysisPage() {
                     <span className="text-[#8892A4]">🔑</span> Deep Video Analysis
                   </h3>
                   <div className="glass-surface rounded-[14px] p-[18px] flex flex-col gap-[10px]">
+                    {analysisPayload.hookAnalysis?.formula && (
+                      <div className="flex items-start gap-3 mb-4 bg-[#A78BFA]/5 border border-[#A78BFA]/20 p-3 rounded-md">
+                        <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-[#A78BFA]/20 text-[#A78BFA] tracking-wider uppercase shrink-0">
+                          FORMULA
+                        </span>
+                        <p className="text-[#A78BFA] text-[13px] font-['DM_Sans'] leading-relaxed italic">
+                          {analysisPayload.hookAnalysis.formula}
+                        </p>
+                      </div>
+                    )}
                     <div className="glass-surface rounded-[10px] p-[16px] border-l-[3px] border-l-[#FF3B57]">
                       <div className="mb-[8px]">
                         <span className="font-['JetBrains_Mono'] text-[9px] text-[#FF3B57] bg-[rgba(255,59,87,0.1)] p-[3px_8px] rounded-[4px] inline-block tracking-[0.05em]">TEXT HOOK</span>
