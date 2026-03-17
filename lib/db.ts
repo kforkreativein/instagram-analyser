@@ -51,32 +51,41 @@ export async function saveSettings(userId: string, settings: Partial<AppSettings
   });
 }
 
-// ── Watchlist persistence (now in Watchlist model) ──────────────────────────────
+// ── Watchlist persistence ──────────────────────────────
 
 export async function getWatchlists(userId: string): Promise<NamedWatchlist[]> {
-    // Note: NamedWatchlist might differ from the basic Watchlist model.
-    // We'll adapt it or assume they are similar.
-    const watchlists = await prisma.watchlist.findMany({
+    const groups = await prisma.watchlistGroup.findMany({
         where: { userId },
+        include: { channels: true },
         orderBy: { createdAt: 'desc' }
     });
     
-    // Convert to NamedWatchlist if necessary
-    return watchlists.map(w => ({
-        id: w.id,
-        name: w.username, // Assuming username is used as name for now
-        channels: [w.username] // Adapting to the expected interface if possible
+    return groups.map(g => ({
+        id: g.id,
+        name: g.name,
+        channels: g.channels.map(c => c.username)
     })) as any;
 }
 
 export async function saveWatchlist(userId: string, watchlist: any): Promise<void> {
-    await prisma.watchlist.create({
+    const groupName = watchlist.name || watchlist.username || "Saved Watchlist";
+    
+    const channelList = Array.isArray(watchlist.channels) 
+      ? watchlist.channels 
+      : [watchlist.username || "unknown"];
+
+    await prisma.watchlistGroup.create({
         data: {
             userId,
-            username: watchlist.username || watchlist.name,
-            platform: watchlist.platform || "Instagram",
-            url: watchlist.url,
-            followers: watchlist.followers,
+            name: groupName,
+            channels: {
+                create: channelList.map((ch: any) => ({
+                    username: typeof ch === 'string' ? ch : (ch.username || "unknown"),
+                    platform: watchlist.platform || "Instagram",
+                    url: watchlist.url,
+                    followers: watchlist.followers,
+                }))
+            }
         }
     });
 }
