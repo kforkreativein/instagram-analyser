@@ -10,6 +10,8 @@ import { useToast } from "@/app/components/UI/Toast";
 import type { ScanProfileResponse } from "@/app/api/scan-profile/route";
 import type { NamedWatchlist, WatchlistChannel } from "@/lib/types";
 import { formatViews, formatNumber, formatRelativeTime } from "@/lib/utils";
+import { ANALYSIS_CACHE_KEY, POSTS_CACHE_KEY } from "@/lib/client-settings";
+import type { AnalyzeResponse } from "@/lib/types";
 
 // ── types ───────────────────────────────────────────────
 type Watchlist = { name: string; count: number; avatars: string[] };
@@ -66,6 +68,67 @@ export default function ChannelsDashboardPage() {
   // 5x5 Master Grid State
   const [showGridModal, setShowGridModal] = useState(false);
   const [masterGrid, setMasterGrid] = useState<FeedOutlier[]>([]);
+  const [analyzingGridId, setAnalyzingGridId] = useState<string | null>(null);
+
+  async function handleGridAnalyze(post: FeedOutlier) {
+    if (analyzingGridId) return;
+    setAnalyzingGridId(post.id);
+    try {
+      const postPayload = {
+        id: post.id,
+        shortcode: post.shortcode,
+        username: post.fromUsername,
+        permalink: post.permalink,
+        caption: post.caption,
+        videoUrl: post.videoUrl,
+        displayUrl: post.displayUrl,
+        postedAt: post.postedAt,
+        mediaType: "REEL",
+        isVideo: true,
+        metrics: { views: post.views, likes: post.likes, comments: 0, saves: 0, shares: 0 },
+        outlierScore: post.outlierScore,
+        authorAverageViews: post.averageViews,
+      };
+
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ post: postPayload, provider: "Gemini", model: "gemini-2.0-flash", platform: "instagram" }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error || "Analysis failed");
+      }
+
+      const analysis = (await res.json()) as AnalyzeResponse;
+
+      // Save analysis to localStorage caches (same as home page)
+      try {
+        const analysesRaw = localStorage.getItem(ANALYSIS_CACHE_KEY);
+        const existing = analysesRaw ? JSON.parse(analysesRaw) : {};
+        localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify({ ...existing, [post.id]: analysis }));
+
+        const postsRaw = localStorage.getItem(POSTS_CACHE_KEY);
+        const existingPosts: any[] = postsRaw ? JSON.parse(postsRaw) : [];
+        const filtered = existingPosts.filter((p: any) => p.id !== post.id);
+        localStorage.setItem(POSTS_CACHE_KEY, JSON.stringify([postPayload, ...filtered]));
+
+        const historyRaw = localStorage.getItem("analyzed_history");
+        const history: any[] = historyRaw ? JSON.parse(historyRaw) : [];
+        localStorage.setItem("analyzed_history", JSON.stringify([
+          { savedAt: new Date().toISOString(), post: postPayload, analysis },
+          ...history.filter((h: any) => h?.post?.id !== post.id),
+        ]));
+      } catch { /* ignore storage errors */ }
+
+      router.push(`/videos/${encodeURIComponent(post.id)}`);
+    } catch (err) {
+      toast("error", "Analysis Failed", err instanceof Error ? err.message : "Could not analyze video.");
+    } finally {
+      setAnalyzingGridId(null);
+    }
+  }
   const tracked = (Array.isArray(watchlist) ? watchlist : []).map((channel) => channel.username);
 
   async function requestWatchlist(method: "GET" | "POST" | "DELETE", body?: unknown) {
@@ -752,7 +815,7 @@ export default function ChannelsDashboardPage() {
                 {(Array.isArray(masterGrid) ? masterGrid : []).map((post, idx) => (
                   <div
                     key={idx}
-                    onClick={() => router.push(`/videos/${post.id}`)}
+                    onClick={() => void handleGridAnalyze(post)}
                     className="relative aspect-[9/14] rounded-2xl overflow-hidden border border-white/5 group bg-black/40 hover:border-cyan-500/50 transition-all duration-300 cursor-pointer"
                   >
                     <img
@@ -779,7 +842,7 @@ export default function ChannelsDashboardPage() {
                     {/* Click-to-analyze hover overlay */}
                     <div className="absolute inset-0 z-40 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/40 backdrop-blur-sm transition-all duration-200">
                       <span className="px-3 py-1.5 bg-white/10 border border-white/20 rounded-md text-white text-xs font-semibold drop-shadow-lg">
-                        ✦ Open Analysis
+                        {analyzingGridId === post.id ? "⏳ Analyzing..." : "✦ Analyze Video"}
                       </span>
                     </div>
 
