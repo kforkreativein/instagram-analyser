@@ -57,14 +57,17 @@ export default function Topbar() {
     return (
         <header className="sticky top-0 bg-[rgba(8,10,15,0.85)] backdrop-blur-[24px] border-b border-[rgba(255,255,255,0.06)] px-4 md:px-6 h-[89px] flex flex-col md:flex-row items-center justify-between gap-4 z-50">
             {/* Breadcrumb (Left-Aligned) */}
-            <div className="flex items-center gap-4">
-                <nav className="flex items-center gap-2 text-sm">
-                    <span className="font-['JetBrains_Mono'] text-[11px] tracking-[0.15em] text-[#5A6478] uppercase">OUTLIER STUDIO</span>
-                    <ChevronRight className="text-[#3BFFC8] opacity-50 text-[10px] mx-2" />
-                    <span className="font-['JetBrains_Mono'] text-[11px] tracking-[0.15em] text-[#F0F2F7] uppercase">
-                        {getPageName().replace(/-/g, " ")}
-                    </span>
-                </nav>
+            <div className="flex items-center font-['DM_Sans'] text-[12px] font-medium">
+                {/* Base text */}
+                <span className="text-[#8892A4]">Outlier Studio</span>
+                
+                {/* Accent Arrow */}
+                <span className="text-[#FF3B57] mx-[8px] text-[10px]">❯</span>
+                
+                {/* Accent Page Name */}
+                <span className="text-[#FF3B57] uppercase tracking-wide">
+                    {getPageName().replace(/-/g, " ")}
+                </span>
             </div>
 
             {/* Action Buttons */}

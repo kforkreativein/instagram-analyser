@@ -1358,42 +1358,42 @@ function HomePageContent() {
                             }}
                             className="relative aspect-[9/14] overflow-hidden bg-[#111620]"
                           >
-                              <img 
-                                src={post.thumbnailUrl || post.displayUrl || post.coverUrl || ""}
-                                alt={post.caption || "Video thumbnail"}
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover opacity-80 transition-opacity duration-200 group-hover:opacity-100"
-                                onError={(e) => {
-                                  // Fallback if image fails to load
-                                  e.currentTarget.src = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=1000&auto=format&fit=crop"; 
-                                  e.currentTarget.className = "w-full h-full object-cover opacity-30";
+                              {/* 1. Video First Frame Thumbnail (Bypasses Vercel & Instagram Blocks) */}
+                              <video
+                                ref={(node) => {
+                                  if (node) {
+                                    videoRefs.current[post.id] = node;
+                                    node.setAttribute("referrerpolicy", "no-referrer");
+                                  }
+                                }}
+                                src={post.videoUrl ? `${post.videoUrl}#t=0.001` : ""}
+                                preload="metadata"
+                                playsInline
+                                muted
+                                crossOrigin="anonymous"
+                                className="w-full h-full object-cover opacity-80 transition-opacity duration-300 group-hover:opacity-100"
+                                onLoadedMetadata={(e) => {
+                                  e.currentTarget.currentTime = 0.001;
                                 }}
                               />
 
-                            {/* Hover Overlay Content */}
-                            <div className="absolute inset-0 z-20 flex flex-col justify-end p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
-                              <div className="space-y-2">
-                                <p className="text-white text-xs font-medium line-clamp-3 leading-relaxed">
-                                  {post.caption || "No caption"}
-                                </p>
-                                <div className="flex items-center justify-between gap-4">
-                                  <div className="flex items-center gap-1.5 px-2 py-1 bg-black/60 backdrop-blur-md border border-white/10 rounded-md text-[10px] font-bold text-white">
-                                    👁 {formatNumber(post.metrics.views)}
-                                  </div>
-                                  <div className={`px-2 py-1 rounded-md text-[10px] font-black backdrop-blur-md border ${
-                                    Number(post.outlierScore) >= 2.0 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' :
-                                    Number(post.outlierScore) >= 1.0 ? 'bg-white/10 text-white border-white/20' : 
-                                    'bg-red-500/10 text-red-400 border-red-500/30'
-                                  }`}>
-                                    {Number(post.outlierScore).toFixed(1)}x
-                                  </div>
-                                </div>
+                            {/* 2. ALWAYS VISIBLE STATS (Bottom Pinned) - NO CAPTION OVERLAY */}
+                            <div className="absolute bottom-3 left-3 right-3 z-30 flex items-center justify-between gap-4 pointer-events-none">
+                              <div className="flex items-center gap-1.5 px-2 py-1 bg-black/70 backdrop-blur-md border border-white/10 rounded-md text-[10px] font-bold text-white shadow-lg">
+                                👁 {formatNumber(post.metrics?.views || 0)}
+                              </div>
+                              <div className={`px-2 py-1 rounded-md text-[10px] font-black backdrop-blur-md border shadow-lg ${
+                                Number(post.outlierScore) >= 2.0 ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]' :
+                                Number(post.outlierScore) >= 1.0 ? 'bg-white/10 text-white border-white/20' : 
+                                'bg-red-500/10 text-red-400 border-red-500/30'
+                              }`}>
+                                {Number(post.outlierScore || 0).toFixed(1)}x
                               </div>
                             </div>
 
-                            {/* Default Badges (Hidden on group-hover if redundant, but keep for now) */}
+                            {/* 3. Default Badge (Top Left) */}
                             <div className="absolute top-[10px] left-[10px] z-30 bg-[rgba(0,0,0,0.65)] backdrop-blur-[12px] border border-[rgba(255,255,255,0.1)] rounded-[5px] px-[7px] py-[3px] font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.1em] text-[#3BFFC8] pointer-events-none">
-                              {post.mediaType === "REEL" ? "REEL" : post.mediaType === "CAROUSEL" ? "CAROUSEL" : post.mediaType.toUpperCase()}
+                              {post.mediaType === "REEL" ? "REEL" : post.mediaType === "CAROUSEL" ? "CAROUSEL" : (post.mediaType || "POST").toUpperCase()}
                             </div>
                           </div>
 

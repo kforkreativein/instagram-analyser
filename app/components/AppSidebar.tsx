@@ -75,14 +75,12 @@ export default function AppSidebar() {
     <aside className="fixed left-0 top-0 bottom-0 w-[240px] md:w-[260px] lg:w-[280px] shrink-0 bg-[rgba(8,10,15,0.97)] border-r border-[rgba(255,255,255,0.06)] z-[100] flex flex-col">
       {/* LOGO AREA */}
       <div className="px-6 h-[89px] flex items-center border-b border-white/5 shrink-0">
-        <Link href="/" className="flex items-center gap-[12px] group hover:opacity-90 transition-opacity no-underline">
-          <div className="w-[32px] h-[32px] rounded-[8px] bg-gradient-to-br from-[#FF3B57] to-[#df2a46] flex items-center justify-center shadow-[0_0_15px_rgba(255,59,87,0.25)]">
-            <span className="text-[18px] text-white select-none">⬡</span>
-          </div>
-          <div className="flex flex-col leading-tight">
-            <span className="font-['Syne'] font-[800] text-[15px] tracking-[0.02em] text-[#F0F2F7]">OUTLIER</span>
-            <span className="font-['JetBrains_Mono'] text-[9px] tracking-[0.25em] text-[#5A6478]">STUDIO</span>
-          </div>
+        <Link href="/" className="flex items-center transition-opacity hover:opacity-90 no-underline">
+          <img 
+            src="/branding/full pay full logo.png" 
+            alt="Outlier Studio" 
+            className="w-auto h-[32px] object-contain"
+          />
         </Link>
       </div>
 
