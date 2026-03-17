@@ -76,10 +76,10 @@ export default function AppSidebar() {
       {/* LOGO AREA */}
       <div className="px-6 h-[89px] flex items-center border-b border-white/5 shrink-0">
         <Link href="/" className="flex items-center transition-opacity hover:opacity-90 no-underline">
-          <img 
-            src="/branding/full pay full logo.png" 
-            alt="Outlier Studio" 
-            className="w-auto h-[32px] object-contain"
+          <img
+            src="/branding/full-logo.png"
+            alt="Outlier Studio"
+            className="w-auto h-[28px] object-contain"
           />
         </Link>
       </div>
