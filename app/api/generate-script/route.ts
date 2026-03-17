@@ -29,6 +29,16 @@ type GenerateScriptBody = {
   geminiApiKey?: string;
   anthropicApiKey?: string;
   videoLength?: string | number;
+  // New Remix Parameters
+  language?: string;
+  targetAudience?: string;
+  videoGoal?: string;
+  emotionIntensity?: string | number;
+  transcript?: string;
+  remixAttribute?: string;
+  hookStyle?: string;
+  structureName?: string;
+  structureSteps?: string;
 };
 
 function parseEngine(value: unknown): CreativeEngine {
@@ -43,58 +53,59 @@ function toStringSafe(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
-const structurePrompts: Record<string, string> = {
-  "Problem Solver": "Format the script exactly using these section headers: [Hook], [Problem], [Agitation], [Solution], [CTA].",
-  "Breakdown": "Format the script exactly using these section headers: [Hook], [Subject Intro], [Key Insight 1], [Key Insight 2], [Takeaway], [CTA].",
-  "Listicle": "Format the script exactly using these section headers: [Hook], [Item 1], [Item 2], [Item 3], [Bonus Tip], [CTA].",
-  "Case Study": "Format the script exactly using these section headers: [Hook], [The Setup], [The Conflict], [The Reveal/Result], [The Lesson], [CTA].",
-  "Tutorial": "Format the script exactly using these section headers: [Hook], [Prerequisites], [Step 1], [Step 2], [Step 3], [Result], [CTA].",
-  "Educational Story": "Format the script exactly using these section headers: [Hook], [Story Start], [The Turning Point], [The Core Lesson], [Application], [CTA].",
-  "Newscaster": "Format the script exactly using these section headers: [Hook], [The News/Update], [Why it Matters], [Your Prediction], [CTA]."
-};
-
 function buildPrompt(body: GenerateScriptBody): string {
-  const topic = toStringSafe(body.topic, "Untitled topic");
-  const executiveSummary = toStringSafe(body.executiveSummary, "No executive summary provided.");
-  const keyContext = toStringSafe(body.keyContext, "No key context provided.");
-  
-  const selectedAngle = toStringSafe(body.selectedAngle, "");
-  const hookType = toStringSafe(body.hookType || body.hookTitle, "Hook");
-  const storyStructure = toStringSafe(body.storyStructure || body.styleTitle, "Style");
+  const language = toStringSafe(body.language, "English");
+  const targetAudience = toStringSafe(body.targetAudience, "a general viral audience");
+  const videoGoal = toStringSafe(body.videoGoal, "Broad Appeal");
   const emotion = toStringSafe(body.emotion, "Engaging");
-  const intensity = toStringSafe(String(body.intensity || ""), "5");
-  const videoLength = parseInt(String(body.videoLength || "60")) || 60;
-  const targetWordCount = Math.floor(videoLength * 2.5);
+  const emotionIntensity = toStringSafe(String(body.emotionIntensity || body.intensity || "5"), "5");
+  const videoLength = toStringSafe(String(body.videoLength || "30"), "30");
+  const transcript = toStringSafe(body.transcript, body.executiveSummary || "");
+  const remixAttribute = toStringSafe(body.remixAttribute, "Idea");
+  const hookStyle = toStringSafe(body.hookStyle || body.hookType || body.hookTitle, "Curiosity Gap");
+  const structureName = toStringSafe(body.structureName || body.storyStructure || body.styleTitle, "Problem Solver");
+  const structureSteps = toStringSafe(body.structureSteps, "Hook -> Problem -> Agitation -> Solution -> CTA");
 
-  const structureInstruction = structurePrompts[storyStructure] || "Format the script with a clear Hook, Body, and CTA.";
-  const lengthInstruction = `CRITICAL LENGTH CONSTRAINT: This script is for a ${videoLength}-second short-form video. Therefore, the ENTIRE script (excluding bracketed tags) MUST be approximately ${targetWordCount} words long. You will be penalized if the script is too long. Keep sentences punchy and fast-paced.`;
+  const wordCountTarget = Math.floor((parseInt(videoLength) || 30) * 2.5);
 
-  return [
-    lengthInstruction,
-    "Write a compelling short-form video script.",
-    "Follow the 4 hook commandments: ALIGNMENT, SPEED TO VALUE, CLARITY, CURIOSITY GAP.",
-    "Write with 1 topic / 1 takeaway.",
-    "Tone: conversational, punchy, human, non-corny.",
-    "Use one sentence per line, with blank lines between sentences.",
-    "Add [VISUAL: description] cues every 2-3 lines.",
-    "Include [PAUSE] markers for pacing.",
-    "End with a strong CTA.",
-    "",
-    "CRITICAL FORMATTING REQUIREMENT:",
-    structureInstruction,
-    "Do not use generic headers like [Context] or [Best Point First]. You must strictly follow the headers provided above.",
-    "",
-    `Topic: ${topic}`,
-    `Executive Summary: ${executiveSummary}`,
-    `Key Context: ${keyContext}`,
-    selectedAngle ? `Angle & Shock Score: ${selectedAngle}` : "",
-    `Hook Framework: ${hookType}`,
-    `Story Structure Outline: ${storyStructure}`,
-    `Emotion Filter: ${emotion}`,
-    `Emotion Intensity: ${intensity}/10`,
-    "",
-    "Return only the final script text.",
-  ].filter(Boolean).join("\n");
+  return `You are an elite short-form video scriptwriter. Your job is to remix an existing transcript into a highly viral, new script.
+
+CRITICAL INSTRUCTIONS:
+- LANGUAGE: Write the entire script strictly in ${language}. Translate the source if necessary.
+- GOAL/AUDIENCE: Optimize this script for ${videoGoal}. The target audience is '${targetAudience}'.
+- VIBE: Inject the emotion of '${emotion}' at an intensity level of ${emotionIntensity}/10.
+- LENGTH: The video is ${videoLength} seconds long. Keep the word count strictly around ${wordCountTarget} words.
+
+CRITICAL LAWS YOU MUST OBEY:
+1. STRICT LANGUAGE ENFORCEMENT: The final script MUST be written entirely in ${language}.
+2. NO VISUAL CUES: DO NOT write camera directions, subtitle notes, text pop-ups, B-roll instructions, or cover cards. Output ONLY the spoken words and the structural headers.
+3. EXACT LENGTH: Spoken text MUST be strictly around ${wordCountTarget} words.
+
+SOURCE TRANSCRIPT:
+"""
+${transcript}
+"""
+
+REMIX DIRECTIVE (Hold 4, Tweak 1):
+You must re-engineer this concept. The core attribute to radically change is: [${remixAttribute}]. Keep the other elements of the idea similar, but completely reinvent the ${remixAttribute}.
+
+REQUIRED STORY STRUCTURE:
+You must follow the "${structureName}" framework. 
+The steps are: ${structureSteps}
+
+REQUIRED HOOK STYLE:
+Use this specific hook style to start the video: ${hookStyle}.
+
+FORMATTING INSTRUCTIONS:
+You must format the output by explicitly naming the structure steps in brackets on their own lines. Do not use bolding for the headers. 
+Example format:
+[Hook]
+The spoken words go here.
+
+[Subject Intro]
+The spoken words go here.
+
+(Write the script now, strictly adhering to the structure above):`;
 }
 
 export async function POST(request: NextRequest) {

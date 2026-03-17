@@ -332,6 +332,7 @@ function ChannelsBuilderContent() {
                         <img
                           src={channel.profilePicUrl}
                           alt={channel.username}
+                          referrerPolicy="no-referrer"
                           className="w-12 h-12 rounded-full border border-white/10 object-cover flex-shrink-0"
                           onError={(e) => { e.currentTarget.style.display = "none"; (e.currentTarget.nextElementSibling as HTMLElement | null)?.classList.remove("hidden"); }}
                         />

@@ -29,7 +29,24 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: true, message: `${provider} API key is required.` }, { status: 401 });
         }
 
-        const systemPrompt = `You are an expert researcher. The user wants to make a video about: ${topic}. Provide 3-4 highly factual, interesting data points, statistics, or practical real-world examples related to this topic. Return a strict JSON array of objects with the following format: [{ "fact": "string", "shockScore": number }]. The shockScore should be a number from 1 to 100 based on this exact prompt: "Out of 100 people, how many would NOT have heard this fact before?". Do not return markdown blocks, just raw JSON.`;
+        const systemPrompt = `You are an elite researcher for viral short-form content. 
+    Topic: ${topic}
+
+    You MUST return a STRICT JSON object with exactly three keys: "title", "executiveSummary", and "facts".
+    
+    1. "title": A punchy, highly clickable 3-to-5 word title for this script (e.g., "The Sleep Jetlag Killer").
+    2. "executiveSummary": A dense, highly informative paragraph summarizing the core mechanics of the topic.
+    3. "facts": An array of 3 to 5 shocking facts. Each fact is an object: { "statement": "...", "score": 95 }.
+
+    Format exactly like this:
+    {
+      "title": "Your Short Title",
+      "executiveSummary": "Your paragraph...",
+      "facts": [
+        { "statement": "The first shocking fact...", "score": 88 },
+        { "statement": "The second shocking fact...", "score": 95 }
+      ]
+    }`;
 
         let generatedText = "";
 
@@ -38,6 +55,7 @@ export async function POST(request: NextRequest) {
             const response = await openai.chat.completions.create({
                 model: model.startsWith("gpt-") ? model : "gpt-4o",
                 messages: [{ role: "user", content: systemPrompt }],
+                response_format: { type: "json_object" }
             });
             generatedText = response.choices[0]?.message?.content?.trim() ?? "";
         } else if (provider === "Anthropic") {
@@ -52,14 +70,19 @@ export async function POST(request: NextRequest) {
         } else {
             const genAI = new GoogleGenerativeAI(apiKey);
             const geminiModel = genAI.getGenerativeModel({
-                model: model.startsWith("gemini-") ? model : "gemini-2.0-flash",
-                generationConfig: { temperature: 0.5 },
+                model: model.startsWith("gemini-") ? model : "gemini-1.5-flash",
+                generationConfig: { 
+                  temperature: 0.5,
+                  responseMimeType: "application/json" 
+                },
             });
             const response = await geminiModel.generateContent(systemPrompt);
             generatedText = response.response.text().trim();
         }
 
-        return NextResponse.json({ text: generatedText });
+        return new NextResponse(generatedText, { 
+          headers: { 'Content-Type': 'application/json' }
+        });
     } catch (error: any) {
         return NextResponse.json(
             { error: true, message: error.message || "Research failed" },

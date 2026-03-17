@@ -732,13 +732,13 @@ function ScriptsPageContent() {
   const [writingMode, setWritingMode] = useState<WritingMode>("polisher");
   const [isImprovingScript, setIsImprovingScript] = useState(false);
   const [iterationFocus, setIterationFocus] = useState<string>("Spoken Hook");
-
   useEffect(() => {
     if (typeof window !== "undefined") {
       const savedFocus = localStorage.getItem("iteration_focus");
       if (savedFocus) setIterationFocus(savedFocus);
     }
   }, []);
+
   const [improveError, setImproveError] = useState("");
   const [scriptLlm, setScriptLlm] = useState("");
   const [showTemplateDrawer, setShowTemplateDrawer] = useState(false);
@@ -758,8 +758,8 @@ function ScriptsPageContent() {
   const [activeLanguage, setActiveLanguage] = useState("English");
   const [emotionFilter, setEmotionFilter] = useState("Shock & Curiosity");
   const [emotionIntensity, setEmotionIntensity] = useState(5);
-  const [shockingFacts, setShockingFacts] = useState<Array<{fact: string, shockScore: number}>>([]);
-  const [selectedAngle, setSelectedAngle] = useState<{fact: string, shockScore: number} | null>(null);
+  const [shockingFacts, setShockingFacts] = useState<Array<{statement: string, score: number}>>([]);
+  const [selectedAngle, setSelectedAngle] = useState<{statement: string, score: number} | null>(null);
   const [scriptStyle, setScriptStyle] = useState("High Energy");
   const [hookType, setHookType] = useState("The Contrarian");
   const [isAdapting, setIsAdapting] = useState(false);
@@ -792,6 +792,34 @@ function ScriptsPageContent() {
   const [videoLength, setVideoLength] = useState(60);
   const { toast } = useToast();
   const [copiedScript, setCopiedScript] = useState(false);
+
+  // Hydrate draft on mount
+  useEffect(() => {
+    const savedDraft = localStorage.getItem("outlier_script_draft");
+    if (savedDraft) {
+      try {
+        const parsed = JSON.parse(savedDraft);
+        if (parsed.topic) setTopic(parsed.topic);
+        if (parsed.scriptTitle) setScriptTitle(parsed.scriptTitle);
+        if (parsed.script) setScript(parsed.script);
+        if (parsed.selectedHookId) setSelectedHookId(parsed.selectedHookId);
+        if (parsed.selectedStyleId) setSelectedStyleId(parsed.selectedStyleId);
+        if (parsed.shockingFacts) setShockingFacts(parsed.shockingFacts);
+      } catch (e) { console.error("Failed to parse draft", e); }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-save draft on every change
+  useEffect(() => {
+    localStorage.setItem("outlier_script_draft", JSON.stringify({
+      topic,
+      scriptTitle,
+      script,
+      selectedHookId,
+      selectedStyleId,
+      shockingFacts,
+    }));
+  }, [topic, scriptTitle, script, selectedHookId, selectedStyleId, shockingFacts]);
 
   const WRITING_MODES: { id: WritingMode; icon: string; label: string; placeholder: string }[] = [
     { id: "polisher", icon: "✍️", label: "The Polisher", placeholder: "Paste your clunky draft here..." },
@@ -1493,21 +1521,34 @@ function ScriptsPageContent() {
           return;
         }
 
-        const payload = {
-          tweakAttribute: tweakAttribute,
-          onePercentFocus: onePercentFocus,
+        const hookData = hookCards.find((c) => c.id === selectedHookId) || { title: "Curiosity Gap" };
+        const styleData: { title: string; flow: string[] } = (styleCards.find((c) => c.id === selectedStyleId) as any) || { title: "Problem Solver", flow: ["Hook", "Problem", "Agitation", "Solution", "CTA"] };
+
+        const remixPayload = {
+          engine: activeModel,
+          topic: topic || "Remix Strategy",
           transcript: remixTranscript,
-          analysis: originalAnalysis || {},
-          selectedModel: activeModel,
-          clientProfile: selectedClient || undefined
+          remixAttribute: tweakAttribute,
+          language: activeLanguage,
+          targetAudience: selectedClient?.targetAudience || (originalAnalysis as any)?.breakdownBlocks?.targetAudienceAndTone || "a general viral audience",
+          videoGoal: scriptJob,
+          emotion: emotionFilter,
+          emotionIntensity: emotionIntensity,
+          videoLength: videoLength,
+          hookStyle: hookData.title,
+          structureName: styleData.title,
+          structureSteps: styleData.flow.join(" -> "),
+          openaiApiKey: localStorage.getItem("openAiApiKey") || undefined,
+          geminiApiKey: localStorage.getItem("geminiApiKey") || undefined,
+          anthropicApiKey: localStorage.getItem("anthropicApiKey") || undefined,
         };
 
-        console.log("3. Payload ready:", payload);
+        console.log("3. Payload ready:", remixPayload);
 
-        const response = await fetch("/api/remix", {
+        const response = await fetch("/api/generate-script", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(remixPayload)
         });
 
         console.log("4. Fetch completed. Status:", response.status);
@@ -1515,12 +1556,12 @@ function ScriptsPageContent() {
         const data = await response.json();
         console.log("5. Data received from API:", data);
 
-        if (data.remix && data.remix.script) {
-          setScript(data.remix.script);
+        if (data.script) {
+          setScript(data.script);
           console.log("6. SUCCESS! Script set in UI.");
           toast("success", "Remix Engineered", `New ${tweakAttribute} strategy generated.`);
         } else {
-          const errMsg = data.details || data.error || "Remix generation failed";
+          const errMsg = data.error || "Remix generation failed";
           setScriptGenError(errMsg);
           console.error("ERROR: No script returned. Data:", data);
         }
@@ -1598,32 +1639,41 @@ function ScriptsPageContent() {
     setShowHookGate(false);
 
     try {
-      const response = await fetch("/api/scripts/generate", {
+      const scratchPayload = {
+        engine: activeModel,
+        topic: userIdea,
+        executiveSummary: (remixData as any)?.blueprint?.executiveSummary || script,
+        selectedAngle: selectedAngle?.statement || "",
+        hookType: overrideHook || hookData.title,
+        storyStructure: storyStructureOverride !== "Auto (from selection)" ? storyStructureOverride : styleData.title,
+        hookStyle: overrideHook || hookData.title,
+        structureName: styleData.title,
+        structureSteps: (styleData as any).flow?.join(" -> ") || "",
+        videoGoal: scriptJob,
+        emotion: emotionFilter,
+        intensity: emotionIntensity,
+        emotionIntensity: emotionIntensity,
+        videoLength,
+        language: activeLanguage,
+        targetAudience: selectedClient?.targetAudience || "a general viral audience",
+        openaiApiKey: localStorage.getItem("openAiApiKey") || undefined,
+        geminiApiKey: localStorage.getItem("geminiApiKey") || undefined,
+        anthropicApiKey: localStorage.getItem("anthropicApiKey") || undefined,
+      };
+
+      const response = await fetch("/api/generate-script", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          engine: activeModel,
-          topic: userIdea,
-          executiveSummary: (remixData as any)?.blueprint?.executiveSummary || script,
-          selectedAngle,
-          hookType: overrideHook || hookData.title,
-          storyStructure: storyStructureOverride !== "Auto (from selection)" ? storyStructureOverride : styleData.title,
-          hookVariation: hookVariation !== "Auto (from selection)" ? hookVariation : undefined,
-          emotion: emotionFilter,
-          intensity: emotionIntensity,
-          videoLength,
-          language: activeLanguage,
-          clientProfile: selectedClient,
-        }),
+        body: JSON.stringify(scratchPayload),
       });
 
       if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string | boolean; message?: string };
-        throw new Error(payload.message || (typeof payload.error === 'string' ? payload.error : null) || "Script generation failed");
+        const errorData = (await response.json().catch(() => ({}))) as { error?: string | boolean; message?: string };
+        throw new Error(errorData.message || (typeof errorData.error === 'string' ? errorData.error : null) || "Script generation failed");
       }
 
-      const payload = (await response.json()) as { script?: string };
-      const generatedText = (payload.script || "").trim();
+      const responseData = (await response.json()) as { script?: string };
+      const generatedText = (responseData.script || "").trim();
       setScript(generatedText);
       toast("success", "Script Generated", "Your viral script is ready.");
 
@@ -1878,83 +1928,77 @@ function ScriptsPageContent() {
     const researchPrompt = `You are an expert investigative researcher. Topic: ${topic}. Provide a concise, high-impact "Executive Summary" of the latest advanced research, data points, and context for this topic. Output ONLY the summary text, no fluff.`;
 
     try {
-      const [resText, resFacts] = await Promise.all([
-        fetch("/api/generate-text", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: researchPrompt, provider, apiKey, model }),
-        }),
-        fetch("/api/research", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic, provider, apiKey, model }),
-        })
-      ]);
+      const resp = await fetch("/api/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic, provider, apiKey, model }),
+      });
 
-      if (!resText.ok) return;
+      if (!resp.ok) return;
 
-      const payload = (await resText.json()) as { text?: string };
-      if (resFacts.ok) {
-        const factsPayload = await resFacts.json();
-        if (factsPayload.json && Array.isArray(factsPayload.json)) {
-          setShockingFacts(factsPayload.json.sort((a: any, b: any) => b.shockScore - a.shockScore));
-        }
+      const data = await resp.json();
+      if (data.facts && Array.isArray(data.facts)) {
+        setShockingFacts(data.facts.sort((a: any, b: any) => b.score - a.score));
       }
 
-      if (payload.text) {
-        // Update remixData or create a dummy one for manual mode to hold the research
-        if (isRemixMode && remixData) {
-          setRemixData({
-            ...remixData,
-            blueprint: {
-              ...(remixData.blueprint || {}),
-              executiveSummary: payload.text.trim(),
-              transcript: remixData.blueprint?.transcript || ""
-            } as RemixBlueprint
-          });
-        } else {
-          // Manual mode dummy remixData
-          setRemixData({
-            post: { id: "manual", caption: topic, videoUrl: "" } as any,
-            analysis: { analysis: {} } as any,
-            transcript: "",
-            blueprint: {
-              executiveSummary: payload.text.trim(),
-              viralHooks: [],
-              transcript: "",
-              subject: topic,
-              angle: "",
-              payoff: "",
-              keyFacts: [],
-              preferredHookId: "",
-              preferredStyleId: ""
-            }
-          });
-          setIsRemixMode(true); // Switch to remix mode UI for the research view
-        }
+      // Apply AI-generated title
+      if (data.title) {
+        setScriptTitle(data.title);
+      }
 
-        // Persist research immediately so it survives a page reload
-        const draftId = (remixData as any)?.post?.id || `scr-${Date.now()}`;
-        const draftTitle = scriptTitle !== "New Script" ? scriptTitle : (topic.length > 40 ? `${topic.substring(0, 40)}...` : topic);
-        void saveScript({
-          id: draftId,
-          title: draftTitle,
-          topic,
-          hook: "",
-          style: "",
-          content: "",
-          research: payload.text.trim(),
-          hooks: [],
-          caption: null,
-          repurposed: null,
-          scriptJob: "",
-          directorsCut: null,
-          prompts: null,
-          packaging: null, // Ensure packaging is null for initial save
-          createdAt: new Date().toISOString(),
-          videoUrl: (remixData as any)?.post?.videoUrl || "",
+      const summaryText = data.executiveSummary || "";
+      
+      if (isRemixMode && remixData) {
+        setRemixData({
+          ...remixData,
+          blueprint: {
+            ...(remixData.blueprint || {}),
+            executiveSummary: summaryText,
+            transcript: remixData.blueprint?.transcript || ""
+          } as RemixBlueprint
         });
+      } else {
+        setRemixData({
+          post: { id: "manual", caption: topic, videoUrl: "" } as any,
+          analysis: { analysis: {} } as any,
+          transcript: "",
+          blueprint: {
+            executiveSummary: summaryText,
+            viralHooks: [],
+            transcript: "",
+            subject: topic,
+            angle: "",
+            payoff: "",
+            keyFacts: [],
+            preferredHookId: "",
+            preferredStyleId: ""
+          }
+        });
+        setIsRemixMode(true);
       }
+
+      // Persist research immediately
+      const draftId = (remixData as any)?.post?.id || `scr-${Date.now()}`;
+      const draftTitle = scriptTitle !== "New Script" ? scriptTitle : (topic.length > 40 ? `${topic.substring(0, 40)}...` : topic);
+      
+      void saveScript({
+        id: draftId,
+        title: draftTitle,
+        topic,
+        hook: "",
+        style: "",
+        content: "",
+        research: summaryText,
+        hooks: [],
+        caption: null,
+        repurposed: null,
+        scriptJob: "",
+        directorsCut: null,
+        prompts: null,
+        packaging: null,
+        createdAt: new Date().toISOString(),
+        videoUrl: (remixData as any)?.post?.videoUrl || "",
+      });
     } catch (err) {
       console.error("Research generation failed:", err);
     }
@@ -2845,12 +2889,12 @@ LANGUAGE: ${activeLanguage}`;
                                 cx="18" cy="18" r="16" fill="none" 
                                 className="stroke-[#3bf6ff]" strokeWidth="4" 
                                 strokeDasharray="100" 
-                                strokeDashoffset={100 - (Math.max(...shockingFacts.map(f => f.shockScore)) || 0)} 
+                                strokeDashoffset={100 - (Math.max(...shockingFacts.map(f => f.score)) || 0)} 
                                 strokeLinecap="round" 
                               />
                             </svg>
                             <div className="absolute inset-0 flex items-center justify-center font-['JetBrains_Mono'] text-[10px] font-[700] text-[#F0F2F7]">
-                              {Math.max(...shockingFacts.map(f => f.shockScore)) || 0}
+                              {Math.max(...shockingFacts.map(f => f.score)) || 0}
                             </div>
                           </div>
                           <div className="flex flex-col">
@@ -2863,16 +2907,16 @@ LANGUAGE: ${activeLanguage}`;
                     {shockingFacts.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-[12px]">
                         {shockingFacts.map((factItem, i) => {
-                          const isSelected = selectedAngle?.fact === factItem.fact;
+                          const isSelected = selectedAngle?.statement === factItem.statement;
                           let glowClass = "border-gray-500/30 text-gray-400";
                           let label = "LOW";
-                          if (factItem.shockScore >= 80) {
+                          if (factItem.score >= 80) {
                             glowClass = "border-[rgba(59,255,200,0.4)] shadow-[0_0_15px_rgba(59,255,200,0.15)] text-[#3BFFC8]";
                             label = "VIRAL";
-                          } else if (factItem.shockScore >= 66) {
+                          } else if (factItem.score >= 66) {
                             glowClass = "border-[rgba(59,130,246,0.4)] shadow-[0_0_10px_rgba(59,130,246,0.15)] text-[#3bf6ff]";
                             label = "HIGH";
-                          } else if (factItem.shockScore >= 41) {
+                          } else if (factItem.score >= 41) {
                             glowClass = "border-[rgba(250,204,21,0.4)] shadow-[0_0_8px_rgba(250,204,21,0.1)] text-[#fbbf24]";
                             label = "MEDIUM";
                           }
@@ -2883,12 +2927,12 @@ LANGUAGE: ${activeLanguage}`;
                               className={`p-[14px] rounded-[10px] cursor-pointer transition-all border bg-[rgba(17,22,32,0.8)] hover:bg-[#111620] flex flex-col justify-between
                                 ${isSelected ? 'ring-2 ring-white/50 bg-[rgba(255,255,255,0.05)] ' : ''} ${glowClass}`}
                             >
-                              <p className="font-['DM_Sans'] text-[13px] text-[#F0F2F7] leading-[1.5] mb-[12px]">{factItem.fact}</p>
+                              <p className="font-['DM_Sans'] text-[13px] text-[#F0F2F7] leading-[1.5] mb-[12px]">{factItem.statement}</p>
                               <div className="flex items-center justify-between">
                                 <span className="font-['JetBrains_Mono'] text-[10px] font-[600] opacity-80 uppercase">{label} SCORE</span>
                                 <div className="flex items-center gap-[8px]">
                                   <div className="relative w-[30px] h-[30px] rounded-full border border-current flex items-center justify-center">
-                                    <span className="font-['JetBrains_Mono'] text-[11px] font-[700]">{factItem.shockScore}</span>
+                                    <span className="font-['JetBrains_Mono'] text-[11px] font-[700]">{factItem.score}</span>
                                   </div>
                                 </div>
                               </div>
@@ -3413,7 +3457,7 @@ LANGUAGE: ${activeLanguage}`;
                 .then(r => r.json())
                 .then(d => { 
                   if (d.error) throw new Error(d.error);
-                  const newHook = d.result;
+                  const newHook = d.updatedScript;
                   // Replace only the hook part if possible
                   if (hookMatch) {
                     setScript(text.replace(hookMatch[1].trim(), newHook));
@@ -3433,8 +3477,8 @@ LANGUAGE: ${activeLanguage}`;
             </button>
             <button onClick={() => {
               setActiveAction('fix-structure');
-              fetch("/api/script-actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script, action: 'improve', focusArea: 'structure', videoLength }) })
-                .then(r => r.json()).then(d => { setScript(d.result); setImprovementLog(p => ["Story structure improved", ...p]); toast("success", "Structure Improved", ""); }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
+              fetch("/api/fix-structure", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script }) })
+                .then(r => r.json()).then(d => { setScript(d.updatedScript || d.result); setImprovementLog(p => ["Story structure improved", ...p]); toast("success", "Structure Improved", ""); }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
             }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-orange-500/30 text-orange-400 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
               {activeAction === 'fix-structure' ? '⏳ Restructuring...' : '🏗 Fix Structure'}
             </button>
@@ -3615,7 +3659,7 @@ LANGUAGE: ${activeLanguage}`;
         
         {/* Caption Output */}
         {generatedCaption && (
-          <div className="mt-4 bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6 relative">
+          <div className="mt-4 bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6 relative max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-[rgba(255,255,255,0.1)] scrollbar-track-transparent pr-2">
             <h3 className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-4">📝 Caption</h3>
             <p className="text-white/90 whitespace-pre-wrap text-[13.5px] leading-relaxed font-['DM_Sans'] pr-8">{generatedCaption}</p>
             <div className="absolute bottom-4 right-4 flex items-center gap-2">
@@ -3627,7 +3671,7 @@ LANGUAGE: ${activeLanguage}`;
 
         {/* Visual Storyboard Output */}
         {visualCues && (
-          <div className="mt-4 bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6 relative">
+          <div className="mt-4 bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6 relative max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-[rgba(255,255,255,0.1)] scrollbar-track-transparent pr-2">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">◎ Visual Storyboard</h3>
               <div className="flex items-center gap-2">
@@ -3922,7 +3966,7 @@ LANGUAGE: ${activeLanguage}`;
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start mt-[16px]">
           {/* A/B HOOK TESTING */}
-          <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[500px]">
+          <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[350px] overflow-y-auto scrollbar-thin scrollbar-thumb-[rgba(255,255,255,0.1)] scrollbar-track-transparent pr-2">
             <div className="p-[14px_18px] border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between bg-[rgba(255,255,255,0.02)]">
               <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.1em] text-[#8892A4]">✦ Hook Variation Lab</span>
             </div>

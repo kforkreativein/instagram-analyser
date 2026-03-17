@@ -704,11 +704,11 @@ export default function ChannelsDashboardPage() {
                       <button
                         type="button"
                         disabled={isScanning || ((wl.channels || (wl as any).profiles || [])?.length || 0) === 0}
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          e.preventDefault(); 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
                           const channels = wl.channels || (wl as any).profiles || [];
-                          void handleScanProfiles((Array.isArray(channels) ? channels : []).map((p: any) => p.username)); 
+                          void handleScanProfiles((Array.isArray(channels) ? channels : []).map((p: any) => p.username));
                         }}
                         className="w-full py-3 rounded-xl border border-white/10 bg-white/5 text-white/80 font-semibold flex items-center justify-center gap-2 hover:bg-cyan-500/10 hover:border-cyan-500 hover:text-cyan-400 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                       >
@@ -739,7 +739,7 @@ export default function ChannelsDashboardPage() {
                   The top 25 outliers across your entire intelligence network, ranked by viral magnitude.
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => setShowGridModal(false)}
                 className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all"
               >
@@ -750,18 +750,18 @@ export default function ChannelsDashboardPage() {
             <div className="flex-1 overflow-y-auto pr-4 custom-scrollbar">
               <div className="grid grid-cols-5 gap-4">
                 {(Array.isArray(masterGrid) ? masterGrid : []).map((post, idx) => (
-                  <div 
-                    key={idx} 
+                  <div
+                    key={idx}
                     className="relative aspect-[9/14] rounded-2xl overflow-hidden border border-white/5 group bg-black/40 hover:border-cyan-500/50 transition-all duration-300"
                   >
-                    <img 
-                      src={post.thumbnailUrl || post.displayUrl || post.coverUrl} 
+                    <img
+                      src={post.thumbnailUrl || post.displayUrl || post.coverUrl}
                       className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:opacity-100 group-hover:scale-110 transition-all duration-500"
                       alt={post.fromUsername}
                       referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity"></div>
-                    
+
                     {/* Metrics Overlay */}
                     <div className="absolute top-2 left-2 flex flex-col gap-1">
                        <span className="bg-cyan-500 text-black font-bold font-['JetBrains_Mono'] text-[9px] px-2 py-0.5 rounded-full shadow-lg">

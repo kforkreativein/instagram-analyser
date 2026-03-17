@@ -120,7 +120,10 @@ export default function UploadsPage() {
       const response = await fetch("/api/analyze-manual", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videoUrl: newBlob.url }),
+        body: JSON.stringify({ 
+          videoUrl: newBlob.url,
+          fileName: file.name 
+        }),
       });
 
       if (!response.ok) {
@@ -372,44 +375,44 @@ export default function UploadsPage() {
             {dbUploads.length === 0 ? (
               <p className="text-white/40 text-sm font-['DM_Sans']">No videos uploaded yet. Drop a file above to start.</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {(Array.isArray(dbUploads) ? dbUploads : []).map((item) => (
-                  <div key={item.id} className="bg-white/[0.04] backdrop-blur-xl border border-white/[0.07] rounded-[16px] overflow-hidden hover:border-[rgba(255,59,87,0.35)] transition-all group">
-                    {/* Top: Video Thumbnail or Placeholder */}
-                    <div className="relative w-full aspect-video bg-[#0d1117] overflow-hidden">
-                      {item.thumbnail ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.thumbnail} alt={item.fileName} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#0d1117] via-[#111620] to-[#0d1117]">
-                          <div className="flex flex-col items-center gap-2 text-white/20">
-                            <FileVideo size={32} strokeWidth={1} />
-                            <span className="font-['JetBrains_Mono'] text-[9px] uppercase tracking-widest">{item.fileName.replace(/\.[^.]+$/, "")}</span>
-                          </div>
-                        </div>
-                      )}
-                      <span className="absolute top-3 right-3 px-[8px] py-[3px] rounded-full font-['JetBrains_Mono'] text-[9px] uppercase tracking-[0.05em] bg-[rgba(255,59,87,0.15)] text-[#FF3B57] border border-[rgba(255,59,87,0.25)]">
-                        Analyzed
-                      </span>
-                    </div>
-                    {/* Bottom: Info + Action */}
-                    <div className="p-4">
-                      <p className="font-['DM_Sans'] font-[600] text-[14px] text-[#F0F2F7] truncate mb-1 group-hover:text-[#FF3B57] transition-colors">
-                        {item.fileName}
-                      </p>
-                      <p className="font-['JetBrains_Mono'] text-[10px] text-[#5A6478] mb-4">
-                        {new Date(item.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                      </p>
-                      <button
-                        onClick={() => router.push(`/videos/${item.id}`)}
-                        className="w-full bg-[rgba(255,59,87,0.1)] border border-[rgba(255,59,87,0.3)] text-[#FF3B57] py-[9px] rounded-[10px] font-['DM_Sans'] text-[13px] font-[600] hover:bg-[#FF3B57] hover:text-white transition-all"
-                      >
-                        View Full Analysis
-                      </button>
-                    </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
+              {(Array.isArray(dbUploads) ? dbUploads : []).map((item: any) => (
+                <article 
+                  key={item.id} 
+                  onClick={() => router.push(`/videos/${item.id}`)} 
+                  className="group relative flex flex-col justify-end aspect-[9/16] rounded-[16px] overflow-hidden cursor-pointer border border-[rgba(255,255,255,0.08)] bg-[#0D1017] transition-all duration-300 hover:border-[rgba(255,255,255,0.2)] hover:-translate-y-1 hover:shadow-2xl w-full max-w-[320px] mx-auto"
+                >
+                  {/* THUMBNAIL / BACKGROUND OVERLAY */}
+                  <div className="absolute inset-0 z-0">
+                    <img 
+                      src={item.thumbnail || "/placeholder-image.jpg"} 
+                      alt={item.fileName}
+                      className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity duration-300"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'; // Failsafe if image is broken
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#0D1017] via-[#0D1017]/50 to-transparent"></div>
                   </div>
-                ))}
-              </div>
+
+                  {/* TOP DATE BADGE */}
+                  <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md border border-white/10 rounded-md px-2 py-1 font-['JetBrains_Mono'] text-[10px] text-gray-300">
+                    {new Date(item.createdAt || Date.now()).toLocaleDateString()}
+                  </div>
+
+                  {/* BOTTOM INFO & BUTTON */}
+                  <div className="relative z-10 p-4 w-full flex flex-col gap-3">
+                    <h3 className="font-['DM_Sans'] text-[14px] text-white font-medium line-clamp-2 drop-shadow-md">
+                      {item.fileName || "Uploaded Video"}
+                    </h3>
+                    
+                    <button className="w-full py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-white font-['DM_Sans'] text-[12px] font-medium transition-colors backdrop-blur-sm flex items-center justify-center gap-2">
+                      ✦ Open Analysis
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
             )}
           </div>
         )}

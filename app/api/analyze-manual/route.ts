@@ -504,6 +504,8 @@ export async function POST(req: NextRequest) {
     if (contentType.includes("application/json")) {
       const body = await req.json();
       const videoUrl = body.videoUrl;
+      fileName = body.fileName || videoUrl?.split("/").pop() || "uploaded_video.mp4";
+      
       if (!videoUrl) return NextResponse.json({ error: "No videoUrl provided" }, { status: 400 });
 
       const resp = await fetch(videoUrl);
@@ -511,7 +513,6 @@ export async function POST(req: NextRequest) {
       const arrayBuffer = await resp.arrayBuffer();
       buffer = Buffer.from(arrayBuffer);
       mimeType = resp.headers.get("content-type") || "video/mp4";
-      fileName = videoUrl.split("/").pop() || "uploaded_video.mp4";
     } else {
       const formData = await req.formData();
       const file = formData.get("file") as File;

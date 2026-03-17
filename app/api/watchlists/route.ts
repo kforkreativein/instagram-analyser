@@ -35,45 +35,51 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    const payload = await request.json();
-    const { name, profiles } = payload;
+    const user = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-    if (!name) return NextResponse.json({ error: "Group name is required." }, { status: 400 });
+    const body = await req.json();
+    const { name, channels, profiles } = body;
+    const profilesToUse = channels || profiles;
 
-    // Create the group and nested channels
+    if (!name || !profilesToUse || !Array.isArray(profilesToUse)) {
+      return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
+    }
+
+    // Properly create the Group and nested Channels based on schema
     const group = await prisma.watchlistGroup.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         name: name,
         channels: {
-          create: (profiles || []).map((p: any) => ({
-            username: p.username.replace(/^@+/, ""),
-            platform: p.platform || "Instagram",
-            url: p.url || `https://www.instagram.com/${p.username.replace(/^@+/, "")}/`,
-            followers: typeof p.followers === 'number' ? p.followers : null,
-            miningQuadrant: p.miningQuadrant || "",
-            profilePicUrl: p.profilePicUrl || "",
-            isVerified: !!p.isVerified,
-          }))
-        }
+          create: profilesToUse.map((ch: any) => ({
+            username: ch.username.replace(/^@+/, ""),
+            platform: ch.platform || "Instagram",
+            url: ch.url || `https://instagram.com/${ch.username.replace(/^@+/, "")}`,
+            followers: typeof ch.followers === 'number' ? ch.followers : null,
+            profilePicUrl: ch.profilePicUrl || "",
+          })),
+        },
       },
       include: { channels: true }
     });
 
     revalidatePath("/channels");
 
-    return NextResponse.json({ 
-      success: true, 
-      watchlist: group 
-    });
+    return NextResponse.json({ success: true, watchlist: group });
   } catch (error) {
-    console.error("[WATCHLISTS_POST]", error);
-    return NextResponse.json({ error: "Unable to create watchlist group." }, { status: 500 });
+    console.error("Watchlist POST Error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal Server Error" }, 
+      { status: 500 }
+    );
   }
 }
 

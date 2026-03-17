@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { type AIProvider, LOCAL_SETTINGS_KEY, parseLocalSettings } from "@/lib/client-settings";
 import { useToast } from "@/app/components/UI/Toast";
 import { Settings, User, Key, Globe, Layout, Briefcase, Eye, EyeOff } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 type ProviderOption = "openai" | "gemini" | "anthropic";
 
@@ -59,6 +60,7 @@ const premiumFieldClassName = "w-full bg-[#0a0a0a] border border-white/10 rounde
 const premiumSelectClassName = `${premiumFieldClassName} appearance-none cursor-pointer`;
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
   const [name, setName] = useState("");
   const [emailAddress, setEmailAddress] = useState("");
   const [apifyApiKey, setApifyApiKey] = useState("");
@@ -288,10 +290,9 @@ export default function SettingsPage() {
                 <label className="font-['JetBrains_Mono'] text-[10px] font-[500] text-[#5A6478] tracking-[0.07em] uppercase mb-[7px]">Email Address</label>
                 <input
                   type="email"
-                  value={emailAddress}
-                  onChange={(e) => setEmailAddress(e.target.value)}
-                  placeholder="you@agency.com"
-                  className={premiumFieldClassName}
+                  value={session?.user?.email || ""}
+                  readOnly={true}
+                  className={premiumFieldClassName + " opacity-60 cursor-not-allowed focus:border-transparent focus:ring-0"}
                 />
               </div>
             </div>

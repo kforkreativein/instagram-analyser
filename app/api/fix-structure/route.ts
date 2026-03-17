@@ -13,9 +13,7 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const scriptText = body.scriptContent || body.script || body.text;
-    const platform = body.platform;
-
-    if (!scriptText || !platform) return NextResponse.json({ error: "Missing data" }, { status: 400 });
+    if (!scriptText) return NextResponse.json({ error: "Missing data" }, { status: 400 });
 
     const settings = await getSettings(session.user.id);
     const apiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY;
@@ -25,12 +23,12 @@ export async function POST(req: Request) {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
-    const prompt = `Convert this video script into a highly engaging text post for ${platform}. Output raw text only. No markdown formatting. \n\nScript:\n${scriptText}`;
+    const prompt = `Analyze this script. Reformat it using clear bracketed tags on their own lines: [HOOK], [BODY], and [CALL TO ACTION]. Add double line breaks between sections. Do not change the actual spoken words, just organize it properly. Output raw text only, no markdown blocks.\n\nScript:\n${scriptText}`;
     
     const result = await model.generateContent(prompt);
-    return NextResponse.json({ repurposedContent: result.response.text() });
-  } catch (error: any) {
-    console.error("Repurpose Error:", error);
+    return NextResponse.json({ updatedScript: result.response.text().replace(/```/g, '').trim() });
+  } catch (error) {
+    console.error("Fix Structure Error:", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "Internal Server Error" }, { status: 500 });
   }
 }
