@@ -54,3 +54,14 @@ export function getFirstValidOutlierScore(...scores: Array<number | null | undef
 
     return null;
 }
+
+export function formatViews(num: number | string | null | undefined): string {
+  if (num === null || num === undefined) return "0";
+  const parsed = typeof num === 'string' ? parseInt(num, 10) : num;
+  if (isNaN(parsed)) return "0";
+  
+  return new Intl.NumberFormat('en-US', {
+    notation: "compact",
+    maximumFractionDigits: 1
+  }).format(parsed);
+}

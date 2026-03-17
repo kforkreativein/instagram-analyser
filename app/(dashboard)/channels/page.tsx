@@ -9,7 +9,7 @@ import { Sparkles } from "lucide-react";
 import { useToast } from "@/app/components/UI/Toast";
 import type { ScanProfileResponse } from "@/app/api/scan-profile/route";
 import type { NamedWatchlist, WatchlistChannel } from "@/lib/types";
-import { formatNumber, formatRelativeTime } from "@/lib/utils";
+import { formatViews, formatNumber, formatRelativeTime } from "@/lib/utils";
 
 // ── types ───────────────────────────────────────────────
 type Watchlist = { name: string; count: number; avatars: string[] };
@@ -39,11 +39,7 @@ function instagramBadge() {
   );
 }
 
-function formatViews(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+
 
 function mergeOutlierFeed(existingFeed: FeedOutlier[], incomingOutliers: FeedOutlier[]): FeedOutlier[] {
   const merged = new Map<string, FeedOutlier>();
