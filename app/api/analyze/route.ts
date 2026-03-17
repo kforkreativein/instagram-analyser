@@ -417,9 +417,6 @@ async function transcribeVideoWithGemini(
   const transcriptionClient = new GoogleGenerativeAI(transcriptionApiKey);
   const transcriptionModel = transcriptionClient.getGenerativeModel({
     model: TRANSCRIPTION_MODEL,
-    generationConfig: {
-      temperature: 0.1,
-    },
   });
 
   const result = await transcriptionModel.generateContent([
@@ -583,11 +580,8 @@ async function generateWithProvider(
     generationConfig: jsonMode
       ? {
         responseMimeType: "application/json",
-        temperature: 0.2,
       }
-      : {
-        temperature: 0.4,
-      },
+      : {},
   });
   const response = await geminiModel.generateContent(prompt);
 

@@ -181,43 +181,60 @@ export default function VideoAnalysisPage() {
   }
 
   useEffect(() => {
-    if (!id || typeof window === "undefined") return;
+    if (!id) return;
 
-    const fromAnalyzed = readHistoryEntry(ANALYZED_HISTORY_KEY, id);
-    const fromSavedVideos = readHistoryEntry(LEGACY_SAVED_VIDEOS_KEY, id);
+    const loadData = async () => {
+      // 1. Try localStorage first (history + cache)
+      if (typeof window !== "undefined") {
+        const fromAnalyzed = readHistoryEntry(ANALYZED_HISTORY_KEY, id);
+        const fromSavedVideos = readHistoryEntry(LEGACY_SAVED_VIDEOS_KEY, id);
 
-    if (fromAnalyzed || fromSavedVideos) {
-      const entry = fromAnalyzed || fromSavedVideos;
-      setPost(entry?.post ?? null);
-      setAnalysis(entry?.analysis ?? null);
-      setError("");
-      return;
-    }
+        if (fromAnalyzed || fromSavedVideos) {
+          const entry = fromAnalyzed || fromSavedVideos;
+          setPost(entry?.post ?? null);
+          setAnalysis(entry?.analysis ?? null);
+          setError("");
+          return;
+        }
 
-    try {
-      const postsRaw = localStorage.getItem(POSTS_CACHE_KEY);
-      const analysesRaw = localStorage.getItem(ANALYSIS_CACHE_KEY);
-      const cachedPosts = postsRaw && Array.isArray(JSON.parse(postsRaw)) === false ? (JSON.parse(postsRaw) as Record<string, InstagramPost>) : {};
-      const cachedAnalyses = analysesRaw && Array.isArray(JSON.parse(analysesRaw)) === false ? (JSON.parse(analysesRaw) as Record<string, AnalyzeResponse>) : {};
+        try {
+          const postsRaw = localStorage.getItem(POSTS_CACHE_KEY);
+          const analysesRaw = localStorage.getItem(ANALYSIS_CACHE_KEY);
+          const cachedPosts = postsRaw && !Array.isArray(JSON.parse(postsRaw)) ? (JSON.parse(postsRaw) as Record<string, InstagramPost>) : {};
+          const cachedAnalyses = analysesRaw && !Array.isArray(JSON.parse(analysesRaw)) ? (JSON.parse(analysesRaw) as Record<string, AnalyzeResponse>) : {};
 
-      const cachedPost = cachedPosts[id];
-      const cachedAnalysis = cachedAnalyses[id];
+          const cachedPost = cachedPosts[id];
+          const cachedAnalysis = cachedAnalyses[id];
 
-      if (!cachedPost || !cachedAnalysis) {
-        setPost(null);
-        setAnalysis(null);
-        setError("Analysis not found in local storage. Re-run analysis from Home and try again.");
-        return;
+          if (cachedPost && cachedAnalysis) {
+            setPost(cachedPost);
+            setAnalysis(cachedAnalysis);
+            setError("");
+            return;
+          }
+        } catch { /* fall through to DB */ }
       }
 
-      setPost(cachedPost);
-      setAnalysis(cachedAnalysis);
-      setError("");
-    } catch {
+      // 2. Fallback: fetch from database (uploaded videos)
+      try {
+        const res = await fetch(`/api/uploads/${encodeURIComponent(id)}`);
+        if (res.ok) {
+          const { upload } = await res.json();
+          setAnalysis({ analysis: upload.analysis } as AnalyzeResponse);
+          setPost(null);
+          setError("");
+          return;
+        }
+      } catch (error) {
+        console.error("Failed to fetch from DB", error);
+      }
+
       setPost(null);
       setAnalysis(null);
-      setError("Unable to read local analysis history.");
-    }
+      setError("Analysis not found.");
+    };
+
+    void loadData();
   }, [id]);
 
   const analysisPayload = analysis?.analysis ?? null;

@@ -423,9 +423,6 @@ async function transcribeWithGemini(
   const transcriptionClient = new GoogleGenerativeAI(transcriptionApiKey);
   const transcriptionModel = transcriptionClient.getGenerativeModel({
     model: TRANSCRIPTION_MODEL,
-    generationConfig: {
-      temperature: 0.1,
-    },
   });
 
   const transcriptionResult = await transcriptionModel.generateContent([
@@ -483,7 +480,6 @@ async function generateWithProvider(
     model: selectedModel,
     generationConfig: {
       responseMimeType: "application/json",
-      temperature: 0.2,
     },
   });
   const response = await geminiModel.generateContent(prompt);

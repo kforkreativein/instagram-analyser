@@ -24,7 +24,6 @@ export default function VideosPage() {
   const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState("All Types");
   const [filterDate, setFilterDate] = useState("All Time");
   const [sortBy, setSortBy] = useState("Newest First");
   const [displayLimit, setDisplayLimit] = useState(12);
@@ -90,14 +89,7 @@ export default function VideosPage() {
       );
     }
 
-    if (filterType !== "All Types") {
-      result = result.filter(v => {
-        if (filterType === "Instagram") return ["REEL", "IMAGE", "CAROUSEL"].includes(v.post.mediaType);
-        if (filterType === "Shorts") return v.post.mediaType === "SHORTS" || v.post.mediaType === "YOUTUBE";
-        if (filterType === "TikToks") return v.post.mediaType === "TIKTOK";
-        return true;
-      });
-    }
+
 
     const now = new Date().getTime();
     if (filterDate === "Today") {
@@ -121,7 +113,7 @@ export default function VideosPage() {
     }
 
     return result;
-  }, [savedVideos, searchQuery, filterType, filterDate, sortBy]);
+  }, [savedVideos, searchQuery, filterDate, sortBy]);
 
   const visibleVideos = filteredAndSortedVideos.slice(0, displayLimit);
 
@@ -259,19 +251,7 @@ export default function VideosPage() {
               />
             </div>
 
-            <div className="relative">
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="appearance-none bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-[8px] p-[10px_32px_10px_14px] font-['DM_Sans'] text-[13px] text-[#F0F2F7] outline-none cursor-pointer transition focus:border-[rgba(255,59,87,0.45)] focus:shadow-[0_0_0_3px_rgba(255,59,87,0.08)]"
-              >
-                <option value="All Types">All Types</option>
-                <option value="Reels">Reels</option>
-                <option value="Shorts">Shorts</option>
-                <option value="TikToks">TikToks</option>
-              </select>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute right-[10px] top-1/2 -translate-y-1/2 w-[14px] h-[14px] text-[#5A6478] pointer-events-none"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </div>
+
 
             <div className="relative">
               <select

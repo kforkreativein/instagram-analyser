@@ -754,7 +754,7 @@ function ScriptsPageContent() {
 
   // Localization Engine state
   const [localeLang, setLocaleLang] = useState("Hinglish (Default)");
-  const [activeModel, setActiveModel] = useState("Gemini 3.0 Flash");
+  const [activeModel, setActiveModel] = useState("gemini-3-flash-preview");
   const [activeLanguage, setActiveLanguage] = useState("English");
   const [emotionFilter, setEmotionFilter] = useState("Shock & Curiosity");
   const [emotionIntensity, setEmotionIntensity] = useState(5);
@@ -1464,7 +1464,7 @@ function ScriptsPageContent() {
       STRICT INSTRUCTION: Return ONLY the exact ID of the best structure from this list: problem-solver, breakdown, listicle, case-study-explainer, tutorial, educational-storytelling, newscaster.`;
 
       const genAI = new GoogleGenerativeAI(key);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
       const result = await model.generateContent(prompt);
       const suggestedId = result.response.text().trim().toLowerCase();
 
@@ -1569,7 +1569,7 @@ function ScriptsPageContent() {
           return;
         }
 
-        const model = activeModel || "gemini-1.5-pro";
+        const model = activeModel || "gemini-3-flash-preview";
         const hookData = hookCards.find((c) => c.id === selectedHookId) || { title: "General Viral" };
 
         const rateRes = await fetch("/api/rate-hook", {
@@ -1827,7 +1827,7 @@ function ScriptsPageContent() {
         setVisualCues(data.result);
         toast("success", "Visual Storyboard Ready", "Visual cues generated for your script.");
       } else if (action === 'prompts') {
-        setImagePrompts(data.result);
+        setImagePrompts(data.prompts || data.result);
         toast("success", "Image Prompts Ready", "Structured scene prompts generated.");
       } else if (action === 'pacing') {
         try {
@@ -1896,7 +1896,7 @@ function ScriptsPageContent() {
     };
 
     const provider = getStoredKey("activeProvider") || "Gemini";
-    const model = getStoredKey("activeModel") || "gemini-2.5-flash";
+    const model = getStoredKey("activeModel") || "gemini-3-flash-preview";
     let apiKey = "";
     if (provider === "OpenAI") apiKey = getStoredKey("openAiApiKey");
     else if (provider === "Anthropic") apiKey = getStoredKey("anthropicApiKey");
@@ -2155,7 +2155,7 @@ function ScriptsPageContent() {
     };
 
     const provider = getStoredKey("activeProvider") || "Gemini";
-    const model = getStoredKey("activeModel") || "gemini-2.5-flash";
+    const model = getStoredKey("activeModel") || "gemini-3-flash-preview";
     let apiKey = "";
     if (provider === "OpenAI") apiKey = getStoredKey("openAiApiKey");
     else if (provider === "Anthropic") apiKey = getStoredKey("anthropicApiKey");
@@ -2281,7 +2281,7 @@ ${text}`;
     };
 
     const provider = getStoredKey("activeProvider") || "Gemini";
-    const model = scriptLlm || getStoredKey("activeModel") || "gemini-2.5-flash";
+    const model = scriptLlm || getStoredKey("activeModel") || "gemini-3-flash-preview";
     let apiKey = "";
     if (provider === "OpenAI") apiKey = getStoredKey("openAiApiKey");
     else if (provider === "Anthropic") apiKey = getStoredKey("anthropicApiKey");
@@ -2333,7 +2333,7 @@ ${text}`;
     };
 
     const provider = getStoredKey("activeProvider") || "Gemini";
-    const model = scriptLlm || getStoredKey("activeModel") || "gemini-2.5-flash";
+    const model = scriptLlm || getStoredKey("activeModel") || "gemini-3-flash-preview";
     let apiKey = "";
     if (provider === "OpenAI") apiKey = getStoredKey("openAiApiKey");
     else if (provider === "Anthropic") apiKey = getStoredKey("anthropicApiKey");
@@ -2398,7 +2398,7 @@ ${text}`;
     };
 
     const provider = getStoredKey("activeProvider") || "Gemini";
-    const model = scriptLlm || getStoredKey("activeModel") || "gemini-2.5-flash";
+    const model = scriptLlm || getStoredKey("activeModel") || "gemini-3-flash-preview";
     let apiKey = "";
     if (provider === "OpenAI") apiKey = getStoredKey("openAiApiKey");
     else if (provider === "Anthropic") apiKey = getStoredKey("anthropicApiKey");
@@ -2495,7 +2495,7 @@ ${text}`;
     };
 
     const provider = getStoredKey("activeProvider") || "Gemini";
-    const model = activeModel || "gemini-2.5-flash";
+    const model = activeModel || "gemini-3-flash-preview";
     let apiKey = "";
     if (provider === "OpenAI") apiKey = getStoredKey("openAiApiKey");
     else if (provider === "Anthropic") apiKey = getStoredKey("anthropicApiKey");
@@ -3214,13 +3214,12 @@ LANGUAGE: ${activeLanguage}`;
               onChange={(e) => setActiveModel(e.target.value)}
               className="bg-white/5 border border-white/10 hover:bg-white/10 transition-colors rounded-[7px] p-[6px_28px_6px_10px] font-['DM_Sans'] text-[11.5px] text-[#8892A4] outline-none cursor-pointer"
             >
-              <option value="Gemini 3.0 Flash">Gemini 3.0 Flash</option>
-              <option value="Gemini 3.0 Pro">Gemini 3.0 Pro</option>
-              <option value="Claude 3.7 Sonnet">Claude 3.7 Sonnet</option>
-              <option value="Claude 4.5 Sonnet">Claude 4.5 Sonnet</option>
-              <option value="GPT-5">GPT-5</option>
-              <option value="GPT-5.1">GPT-5.1</option>
-              <option value="GPT-5.2">GPT-5.2</option>
+              <option value="gemini-3-flash-preview">Gemini 3 Flash</option>
+              <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro</option>
+              <option value="gpt-5-mini-2025-08-07">GPT-5 Mini</option>
+              <option value="gpt-5.4">GPT-5.4</option>
+              <option value="claude-4.5-haiku">Claude 4.5 Haiku</option>
+              <option value="claude-4.6-sonnet">Claude 4.6 Sonnet</option>
             </select>
             <select
               value={activeLanguage}
@@ -3516,7 +3515,7 @@ LANGUAGE: ${activeLanguage}`;
                     </span>
                     <div className="flex-1 min-w-0">
                       <p className="font-['Syne'] font-[700] text-[12px] text-white mb-1">{s.title}</p>
-                      <p className="font-['DM_Sans'] text-[11.5px] text-white/60">{s.suggestion}</p>
+                      <p className="text-[12px] text-[#8892A4] font-['DM_Sans'] mt-1.5 leading-relaxed">{s.suggestion || (s as any).description || (s as any).reasoning}</p>
                     </div>
                     <button
                       onClick={() => void applyImprovement(s)}
@@ -3560,20 +3559,6 @@ LANGUAGE: ${activeLanguage}`;
                 </label>
               </div>
 
-              {/* Iteration History / Improvement Log */}
-              {improvementLog.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/5">
-                  <h4 className="font-['Syne'] font-[700] text-[11px] text-white/40 uppercase tracking-[0.12em] mb-2">📋 Improvement History</h4>
-                  <ul className="space-y-1.5">
-                    {improvementLog.map((entry, i) => (
-                      <li key={i} className="flex items-center gap-2 text-[11px] font-['DM_Sans'] text-white/50">
-                        <span className="text-[#3BFFC8] shrink-0">✓</span>
-                        <span className="truncate">{entry}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -3687,29 +3672,36 @@ LANGUAGE: ${activeLanguage}`;
           </div>
         )}
 
-        {/* Overhauled Image/Video Prompts UI */}
-        {imagePrompts && Array.isArray(imagePrompts) && (
-          <div className="mt-6 space-y-6">
-            <div className="flex justify-between items-center border-b border-white/10 pb-3">
-              <h3 className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest">🖼 Scene-by-Scene Visual Prompts</h3>
-              <button onClick={() => setImagePrompts(null)} className="text-gray-500 hover:text-white transition-colors text-xs">✕ Close</button>
+        {/* AI Generation Prompts UI */}
+        {imagePrompts && Array.isArray(imagePrompts) && imagePrompts.length > 0 && (
+          <div className="mt-6 bg-[#0D1017] border border-[rgba(255,255,255,0.08)] rounded-[14px] p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-['JetBrains_Mono'] text-[11px] uppercase tracking-[0.15em] text-[#3BFFC8]">
+                ✦ AI Generation Prompts
+              </h3>
+              <button onClick={() => setImagePrompts(null)} className="text-[10px] text-white/30 hover:text-white/60 transition-colors">✕ Clear</button>
             </div>
-            <div className="space-y-6">
-              {imagePrompts.map((item, index) => (
-                <div key={index} className="bg-white/5 border border-white/10 backdrop-blur-md rounded-xl p-6">
-                  <h4 className="text-white font-medium text-[15px] mb-4">"{item.scriptLine}"</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-black/20 p-4 rounded-lg border border-white/5">
-                      <span className="text-[10px] text-[#FF3366] uppercase tracking-wider font-bold">Image Prompt</span>
-                      <p className="text-gray-300 text-sm mt-2 leading-relaxed font-['JetBrains_Mono']">{item.imagePrompt}</p>
-                    </div>
-                    <div className="bg-black/20 p-4 rounded-lg border border-white/5">
-                      <span className="text-[10px] text-[#00E5FF] uppercase tracking-wider font-bold">Video Prompt</span>
-                      <p className="text-gray-300 text-sm mt-2 leading-relaxed font-['JetBrains_Mono']">{item.videoPrompt}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {imagePrompts.flatMap((item: any, i: number) => [
+                <div key={`img-${i}`} className="bg-[#111620] border border-[rgba(255,255,255,0.05)] rounded-lg p-4 relative group hover:border-[#3BFFC8]/30 transition-colors">
+                  <span className="absolute top-3 right-3 text-[10px] font-['JetBrains_Mono'] text-[#8892A4] bg-black/50 px-2 py-1 rounded">IMAGE</span>
+                  <p className="text-[10px] text-[#8892A4] font-['JetBrains_Mono'] mb-2 leading-relaxed pr-16">"{item.scriptLine}"</p>
+                  <p className="text-[13px] text-white font-['DM_Sans'] leading-relaxed">{item.imagePrompt}</p>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(item.imagePrompt)}
+                    className="mt-3 text-[11px] text-[#3BFFC8] opacity-0 group-hover:opacity-100 transition-opacity font-medium"
+                  >Copy Prompt ⎘</button>
+                </div>,
+                <div key={`vid-${i}`} className="bg-[#111620] border border-[rgba(255,255,255,0.05)] rounded-lg p-4 relative group hover:border-[#3BFFC8]/30 transition-colors">
+                  <span className="absolute top-3 right-3 text-[10px] font-['JetBrains_Mono'] text-[#8892A4] bg-black/50 px-2 py-1 rounded">VIDEO</span>
+                  <p className="text-[10px] text-[#8892A4] font-['JetBrains_Mono'] mb-2 leading-relaxed pr-16">"{item.scriptLine}"</p>
+                  <p className="text-[13px] text-white font-['DM_Sans'] leading-relaxed">{item.videoPrompt}</p>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(item.videoPrompt)}
+                    className="mt-3 text-[11px] text-[#3BFFC8] opacity-0 group-hover:opacity-100 transition-opacity font-medium"
+                  >Copy Prompt ⎘</button>
+                </div>,
+              ])}
             </div>
           </div>
         )}

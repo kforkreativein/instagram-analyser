@@ -93,7 +93,7 @@ export default function ChannelsDashboardPage() {
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ post: postPayload, provider: "Gemini", model: "gemini-2.0-flash", platform: "instagram" }),
+        body: JSON.stringify({ post: postPayload, provider: "Gemini", model: "gemini-3-flash-preview", platform: "instagram" }),
       });
 
       if (!res.ok) {
@@ -351,7 +351,7 @@ export default function ChannelsDashboardPage() {
     };
 
     const provider = getStoredKey("activeProvider") || "Gemini";
-    const model = getStoredKey("activeModel") || "gemini-2.5-flash";
+    const model = getStoredKey("activeModel") || "gemini-3-flash-preview";
     let apiKey = "";
     if (provider === "OpenAI") apiKey = getStoredKey("openAiApiKey");
     else if (provider === "Anthropic") apiKey = getStoredKey("anthropicApiKey");
@@ -818,15 +818,24 @@ export default function ChannelsDashboardPage() {
                     onClick={() => void handleGridAnalyze(post)}
                     className="relative aspect-[9/14] rounded-2xl overflow-hidden border border-white/5 group bg-black/40 hover:border-cyan-500/50 transition-all duration-300 cursor-pointer"
                   >
-                    <img
-                      src={post.displayUrl || post.thumbnailUrl || post.videoUrl || ""}
-                      alt="Viral Thumbnail"
-                      referrerPolicy="no-referrer"
+                    <video
+                      ref={(node) => {
+                        if (node) {
+                          node.setAttribute("referrerpolicy", "no-referrer");
+                        }
+                      }}
+                      src={post.videoUrl ? `${post.videoUrl}#t=0.001` : ""}
+                      preload="metadata"
+                      playsInline
+                      muted
+                      crossOrigin="anonymous"
                       className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-300"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      onLoadedMetadata={(e) => {
+                        e.currentTarget.currentTime = 0.001;
+                      }}
                     />
-                    {/* Fallback gradient if image fails */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0D1017] via-transparent to-transparent -z-10"></div>
+                    {/* Keep the dark fallback gradient behind it just in case */}
+                    <div className="absolute inset-0 bg-[#0D1017] -z-10"></div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity"></div>
 
                     {/* Metrics Overlay */}

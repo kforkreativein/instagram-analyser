@@ -138,7 +138,7 @@ Return ONLY the final script text. Do not include introductory filler. Output in
             const genAI = new GoogleGenerativeAI(apiKey);
             const geminiModel = genAI.getGenerativeModel({
                 model: mapGeminiModel(safeModel),
-                generationConfig: { temperature: 0.7 },
+                generationConfig: {},
             });
             const response = await geminiModel.generateContent(prompt);
             generatedText = response.response.text().trim();
