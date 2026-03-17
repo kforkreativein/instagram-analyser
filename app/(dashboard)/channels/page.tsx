@@ -96,7 +96,7 @@ export default function ChannelsDashboardPage() {
     async function hydrateWatchlist() {
       try {
         const remoteWatchlist = await requestWatchlist("GET");
-        if (remoteWatchlist.length > 0) {
+        if ((remoteWatchlist?.length || 0) > 0) {
           setWatchlist(remoteWatchlist);
           return;
         }
@@ -107,7 +107,7 @@ export default function ChannelsDashboardPage() {
       try {
         const raw = localStorage.getItem(TRACKED_KEY);
         const storedUsernames = raw ? (JSON.parse(raw) as string[]) : [];
-        if (!Array.isArray(storedUsernames) || storedUsernames.length === 0) {
+        if (!Array.isArray(storedUsernames) || (storedUsernames?.length || 0) === 0) {
           setWatchlist([]);
           return;
         }
@@ -120,7 +120,7 @@ export default function ChannelsDashboardPage() {
           nextWatchlist = await requestWatchlist("POST", buildInstagramWatchlistChannel(normalizedUsername));
         }
 
-        setWatchlist(nextWatchlist.length > 0 ? nextWatchlist : storedUsernames.map(buildInstagramWatchlistChannel));
+        setWatchlist((nextWatchlist?.length || 0) > 0 ? nextWatchlist : (Array.isArray(storedUsernames) ? storedUsernames : []).map(buildInstagramWatchlistChannel));
       } catch {
         setWatchlist([]);
       }
@@ -196,7 +196,7 @@ export default function ChannelsDashboardPage() {
   const [newOutliers, setNewOutliers] = useState<FeedOutlier[]>([]);
 
   async function handleScanProfiles(usernames: string[]) {
-    if (usernames.length === 0) {
+    if ((usernames?.length || 0) === 0) {
       setScanError("No profiles to scan in this watchlist.");
       return;
     }
@@ -215,9 +215,9 @@ export default function ChannelsDashboardPage() {
     setIsScanning(true);
 
     try {
-      for (let i = 0; i < usernames.length; i++) {
+      for (let i = 0; i < (usernames?.length || 0); i++) {
         const username = usernames[i];
-        setScanProgress(`Scanning @${username} (${i + 1} of ${usernames.length})…`);
+        setScanProgress(`Scanning @${username} (${i + 1} of ${usernames?.length || 0})…`);
         try {
           const res = await fetch("/api/scan-profile", {
             method: "POST",
@@ -228,7 +228,7 @@ export default function ChannelsDashboardPage() {
             const payload = (await res.json()) as ScanProfileResponse;
             const channelOutliers = (Array.isArray(payload.outliers) ? payload.outliers : []).map((outlier) => ({ ...outlier, fromUsername: username }));
 
-            if (channelOutliers.length > 0) {
+            if ((channelOutliers?.length || 0) > 0) {
               setNewOutliers((prevFeed) => mergeOutlierFeed(prevFeed, channelOutliers));
             }
           }
@@ -247,10 +247,10 @@ export default function ChannelsDashboardPage() {
     const allUsernames = Array.from(
       new Set((Array.isArray(namedWatchlists) ? namedWatchlists : []).flatMap((wl) => {
         const channels = wl.channels || (wl as any).profiles || [];
-        return Array.isArray(channels) ? channels.map((p: any) => p.username) : [];
+        return (Array.isArray(channels) ? channels : []).map((p: any) => p.username);
       }))
     );
-    if (allUsernames.length === 0) {
+    if ((allUsernames?.length || 0) === 0) {
       setScanError("No profiles tracked. Build a watchlist first.");
       return;
     }
@@ -281,7 +281,7 @@ export default function ChannelsDashboardPage() {
       .filter((o) => o.fromUsername === username)
       .slice(0, 5);
 
-    if (creatorOutliers.length === 0) {
+    if ((creatorOutliers?.length || 0) === 0) {
       setExtractError("Scan channels first to find outliers, then extract formats.");
       return;
     }
@@ -349,7 +349,7 @@ export default function ChannelsDashboardPage() {
   }
 
   function handleGenerateGrid() {
-    if (newOutliers.length === 0) {
+    if ((newOutliers?.length || 0) === 0) {
       toast("info", "No Outliers Found", "Scan your tracked channels first to populate the feed.");
       return;
     }
@@ -378,7 +378,7 @@ export default function ChannelsDashboardPage() {
 
     const escapeCsv = (val: string | number) => `"${String(val).replace(/"/g, '""')}"`;
 
-    newOutliers.forEach((o) => {
+    (newOutliers || []).forEach((o) => {
       const avgViews = o.averageViews || 0;
       const outlierScore = o.outlierScore ?? o.multiplier;
       const engagementRate = o.views > 0 ? ((o.likes / o.views) * 100).toFixed(2) + "%" : "0%";
@@ -442,7 +442,7 @@ export default function ChannelsDashboardPage() {
               >
                 {isScanning ? scanProgress || "Scanning…" : "↻ Scan All Watchlists"}
               </button>
-              {newOutliers.length > 0 && (
+              {(newOutliers?.length || 0) > 0 && (
                 <button
                   type="button"
                   onClick={handleGenerateGrid}
@@ -461,13 +461,13 @@ export default function ChannelsDashboardPage() {
           ) : null}
 
           {/* MASTER OUTLIER FEED */}
-          {newOutliers.length > 0 ? (
+          { (newOutliers?.length || 0) > 0 ? (
             <div className="mb-[40px]">
               <div className="mb-[20px] flex items-center justify-between">
                 <div className="flex items-center gap-[10px]">
                   <h2 className="font-['Syne'] font-[700] text-[16px] text-[#F0F2F7]">🏆 Master Outlier Feed</h2>
                   <span className="font-['JetBrains_Mono'] text-[10px] bg-[rgba(255,59,87,0.1)] border border-[rgba(255,59,87,0.2)] text-[#FF3B57] px-[8px] py-[3px] rounded-[4px]">
-                    {newOutliers.length} outliers • Sorted by Score
+                    {newOutliers?.length || 0} outliers • Sorted by Score
                   </span>
                 </div>
                 <button
@@ -519,7 +519,6 @@ export default function ChannelsDashboardPage() {
                               preload="metadata"
                               playsInline
                               muted
-                              referrerPolicy="no-referrer"
                               data-thumbnail-fallback="true"
                               className="hidden absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 bg-[#0a0a0a]"
                             />
@@ -535,7 +534,6 @@ export default function ChannelsDashboardPage() {
                           preload="metadata"
                           playsInline
                           muted
-                          referrerPolicy="no-referrer"
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 bg-[#0a0a0a]"
                         />
                       ) : (
@@ -594,7 +592,7 @@ export default function ChannelsDashboardPage() {
               <div className="flex items-center gap-[10px]">
                 <h2 className="font-['Syne'] font-[700] text-[16px] text-[#F0F2F7]">📋 My Watchlists</h2>
                 <span className="font-['JetBrains_Mono'] text-[10px] bg-[rgba(59,255,200,0.08)] border border-[rgba(59,255,200,0.2)] text-[#3BFFC8] px-[8px] py-[3px] rounded-[4px]">
-                  {namedWatchlists.length} watchlist{namedWatchlists.length !== 1 ? "s" : ""}
+                  {namedWatchlists?.length || 0} watchlist{(namedWatchlists?.length || 0) !== 1 ? "s" : ""}
                 </span>
               </div>
               <Link
@@ -609,7 +607,7 @@ export default function ChannelsDashboardPage() {
               <div className="rounded-[12px] border border-dashed border-[rgba(255,255,255,0.12)] bg-[#0D1017] p-[32px] text-center">
                 <p className="text-[13.5px] font-['DM_Sans'] text-[#5A6478]">Loading watchlists…</p>
               </div>
-            ) : namedWatchlists.length === 0 ? (
+            ) : (namedWatchlists?.length || 0) === 0 ? (
               <div className="rounded-[12px] border border-dashed border-[rgba(255,255,255,0.12)] bg-[#0D1017] p-[40px] text-center">
                 <p className="text-[14px] font-['DM_Sans'] text-[#8892A4] mb-[8px]">No watchlists yet.</p>
                 <p className="text-[12px] font-['DM_Sans'] text-[#5A6478] mb-[20px]">Use the Builder to create your first named watchlist.</p>
@@ -690,9 +688,9 @@ export default function ChannelsDashboardPage() {
                         })()}
                         {(() => {
                           const channels = wl.channels || (wl as any).profiles || [];
-                          return channels.length > 4 && (
+                          return (channels?.length || 0) > 4 && (
                             <div className="w-10 h-10 rounded-full border-2 border-[#0A0A0A] -ml-3 bg-white/10 flex items-center justify-center text-xs font-bold text-white/60 flex-shrink-0">
-                              +{channels.length - 4}
+                              +{(channels?.length || 0) - 4}
                             </div>
                           );
                         })()}
@@ -700,7 +698,7 @@ export default function ChannelsDashboardPage() {
                       <p className="text-xs text-white/40 mt-2">
                         {(() => {
                           const channels = wl.channels || (wl as any).profiles || [];
-                          return `${channels.length} creator${channels.length !== 1 ? "s" : ""} tracked`;
+                          return `${channels?.length || 0} creator${(channels?.length || 0) !== 1 ? "s" : ""} tracked`;
                         })()}
                       </p>
                     </div>
@@ -709,7 +707,7 @@ export default function ChannelsDashboardPage() {
                     <div className="mt-auto pt-3">
                       <button
                         type="button"
-                        disabled={isScanning || (wl.channels || (wl as any).profiles || []).length === 0}
+                        disabled={isScanning || ((wl.channels || (wl as any).profiles || [])?.length || 0) === 0}
                         onClick={(e) => { 
                           e.stopPropagation(); 
                           e.preventDefault(); 

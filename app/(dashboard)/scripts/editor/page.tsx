@@ -3969,6 +3969,7 @@ LANGUAGE: ${activeLanguage}`;
                 )}
               </div>
             </div>
+          </div>
 
           {/* REPURPOSE CONTENT */}
           <div className="glass-surface rounded-[14px] overflow-hidden flex flex-col h-full max-h-[500px]">

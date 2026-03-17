@@ -131,7 +131,7 @@ function ChannelsBuilderContent() {
   async function handleAddManual() {
     const parsedUsernames = parseManualInput(manualInput);
 
-    if (parsedUsernames.length === 0) {
+    if ((parsedUsernames?.length || 0) === 0) {
       setWatchlistError("Enter at least one valid Instagram profile URL.");
       return;
     }
@@ -157,7 +157,7 @@ function ChannelsBuilderContent() {
 
       const fetchedProfiles = (await fetchRes.json()) as FetchedProfile[];
 
-      const newChannels: WatchlistChannel[] = fetchedProfiles.map((p) => ({
+      const newChannels: WatchlistChannel[] = (Array.isArray(fetchedProfiles) ? fetchedProfiles : []).map((p) => ({
         username: p.username,
         platform: "instagram",
         url: `https://www.instagram.com/${p.username}/`,
@@ -168,8 +168,8 @@ function ChannelsBuilderContent() {
       }));
 
       setWatchlist((prev) => {
-        const existing = new Set(prev.map((c) => c.username.toLowerCase()));
-        const fresh = newChannels.filter((c) => !existing.has(c.username.toLowerCase()));
+        const existing = new Set((prev || []).map((c) => c.username.toLowerCase()));
+        const fresh = (newChannels || []).filter((c) => !existing.has(c.username.toLowerCase()));
         return [...prev, ...fresh];
       });
       setManualInput("");
@@ -185,7 +185,7 @@ function ChannelsBuilderContent() {
   }
 
   function handleRemoveAll() {
-    if (!watchlist.length || !confirm("Remove all channels from the watchlist?")) return;
+    if (!(watchlist?.length || 0) || !confirm("Remove all channels from the watchlist?")) return;
     setWatchlist([]);
   }
 
@@ -195,7 +195,7 @@ function ChannelsBuilderContent() {
       setWatchlistError("Please enter a name for this watchlist.");
       return;
     }
-    if (watchlist.length === 0) {
+    if ((watchlist?.length || 0) === 0) {
       setWatchlistError("Add at least one channel before saving.");
       return;
     }
@@ -303,15 +303,15 @@ function ChannelsBuilderContent() {
         <div className="bg-[#0D1017] border border-[rgba(255,255,255,0.06)] rounded-[14px] overflow-hidden flex flex-col">
           <div className="p-[16px_18px] border-b border-[rgba(255,255,255,0.06)] flex items-center justify-between">
             <h2 className="font-['Syne'] font-[700] text-[14px] text-[#F0F2F7] flex items-center gap-[8px]">
-              Included <span className="font-['JetBrains_Mono'] text-[10px] text-[#5A6478] font-[500] uppercase">({watchlist.length} channels)</span>
+              Included <span className="font-['JetBrains_Mono'] text-[10px] text-[#5A6478] font-[500] uppercase">({watchlist?.length || 0} channels)</span>
             </h2>
           </div>
           <div className="min-h-[280px] p-[16px]">
             {isHydratingWatchlist ? (
               <div className="flex items-center justify-center h-[280px] text-white/40 text-sm">Loading watchlist...</div>
-            ) : watchlist && watchlist.length > 0 ? (
+            ) : watchlist && (watchlist?.length || 0) > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-4 overflow-y-auto max-h-[600px] pr-2">
-                {watchlist.map((channel, idx) => (
+                {(watchlist || []).map((channel, idx) => (
                   <div
                     key={`${channel.platform}-${channel.username}-${idx}`}
                     className="bg-[#1A1A1A] border border-white/5 rounded-2xl p-5 hover:border-white/10 transition-colors relative group flex flex-col h-full"
@@ -395,7 +395,7 @@ function ChannelsBuilderContent() {
             <button
               type="button"
               onClick={() => void handleSaveWatchlist()}
-              disabled={isSavingWatchlist || watchlist.length === 0}
+              disabled={isSavingWatchlist || (watchlist?.length || 0) === 0}
               className="bg-[#3BFFC8] text-[#080A0F] p-[8px_20px] rounded-[8px] font-['DM_Sans'] text-[13px] font-[700] border-none shadow-[0_0_16px_rgba(59,255,200,0.3)] transition duration-150 hover:shadow-[0_0_24px_rgba(59,255,200,0.5)] hover:-translate-y-[1px] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
             >
               {isSavingWatchlist ? "Saving..." : editId ? "💾 Update Watchlist" : "💾 Save Watchlist"}
