@@ -26,7 +26,6 @@ export default function PostCard({ post, onAnalyze }: PostCardProps) {
                 preload="metadata"
                 playsInline
                 controls
-                referrerPolicy="no-referrer"
                 controlsList="nodownload"
                 className="h-full w-full object-cover"
                 onCanPlay={(event) => {

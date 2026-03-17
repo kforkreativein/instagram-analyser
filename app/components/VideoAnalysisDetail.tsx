@@ -407,7 +407,6 @@ export default function VideoAnalysisDetail({
                     loop
                     playsInline
                     controls
-                    referrerPolicy="no-referrer"
                     controlsList="nodownload"
                     autoPlay
                     className="h-full w-full object-cover"
