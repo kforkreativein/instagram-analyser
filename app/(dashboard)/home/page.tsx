@@ -1367,7 +1367,7 @@ function HomePageContent() {
                                 controls={false}
                                 preload="metadata"
                                 playsInline
-                                referrerPolicy="no-referrer"
+                                {...({ referrerPolicy: "no-referrer" } as any)}
                                 className="w-full h-full object-cover opacity-80 transition-opacity duration-200 group-hover:opacity-100"
                               onLoadedMetadata={(event) => {
                                 const video = event.currentTarget;

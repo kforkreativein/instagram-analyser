@@ -365,7 +365,7 @@ export default function VideosPage() {
                             preload="metadata"
                             muted
                             playsInline
-                            referrerPolicy="no-referrer"
+                            {...({ referrerPolicy: "no-referrer" } as any)}
                             className={`w-full h-full object-cover opacity-80 transition-transform duration-500 group-hover:scale-105 group-hover:opacity-100 ${(item.post.displayUrl || item.post.thumbnailUrl || item.post.coverUrl) ? "hidden" : ""}`}
                           />
                         ) : (

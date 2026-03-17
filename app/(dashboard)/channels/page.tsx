@@ -515,6 +515,7 @@ export default function ChannelsDashboardPage() {
                               preload="metadata"
                               playsInline
                               muted
+                              {...({ referrerPolicy: "no-referrer" } as any)}
                               data-thumbnail-fallback="true"
                               className="hidden absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 bg-[#0a0a0a]"
                             />
@@ -530,6 +531,7 @@ export default function ChannelsDashboardPage() {
                           preload="metadata"
                           playsInline
                           muted
+                          {...({ referrerPolicy: "no-referrer" } as any)}
                           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 bg-[#0a0a0a]"
                         />
                       ) : (
