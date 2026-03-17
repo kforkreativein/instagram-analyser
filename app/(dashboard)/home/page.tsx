@@ -1358,25 +1358,17 @@ function HomePageContent() {
                             }}
                             className="relative aspect-[9/14] overflow-hidden bg-[#111620]"
                           >
-                              <video
-                                ref={(node) => {
-                                  videoRefs.current[post.id] = node;
-                                }}
-                                src={post.videoUrl ? `${post.videoUrl}#t=0.001` : ""}
-                                poster={post.thumbnailUrl || post.displayUrl || post.coverUrl || post.videoUrl}
-                                controls={false}
-                                preload="metadata"
-                                playsInline
-                                {...({ referrerPolicy: "no-referrer" } as any)}
+                              <img 
+                                src={post.thumbnailUrl || post.displayUrl || post.coverUrl || ""}
+                                alt={post.caption || "Video thumbnail"}
+                                referrerPolicy="no-referrer"
                                 className="w-full h-full object-cover opacity-80 transition-opacity duration-200 group-hover:opacity-100"
-                              onLoadedMetadata={(event) => {
-                                const video = event.currentTarget;
-                                video.pause();
-                                try {
-                                  video.currentTime = 0;
-                                } catch { }
-                              }}
-                            />
+                                onError={(e) => {
+                                  // Fallback if image fails to load
+                                  e.currentTarget.src = "https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=1000&auto=format&fit=crop"; 
+                                  e.currentTarget.className = "w-full h-full object-cover opacity-30";
+                                }}
+                              />
 
                             {/* Hover Overlay Content */}
                             <div className="absolute inset-0 z-20 flex flex-col justify-end p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
