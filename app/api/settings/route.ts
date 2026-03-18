@@ -59,23 +59,21 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    const body = await request.json() as Record<string, unknown>;
-    const allowed = [
-      "geminiApiKey", "openaiApiKey", "anthropicApiKey", "apifyApiKey", 
-      "elevenlabsApiKey", "sarvamApiKey", "agencyName", "agencyLogo",
-      "activeProvider", "activeModel"
-    ];
-    const update: Record<string, string | null> = {};
+    const body = await request.json() as Record<string, string | null | undefined>;
+    const SENTINEL = "••••••••";
 
-    for (const key of allowed) {
-      if (typeof body[key] === "string") {
-        const val = (body[key] as string).trim();
-        // Only update the key if the user provided a non-empty value
-        // (empty string means "don't change" since we never send keys back)
-        if (val) update[key] = val;
-      } else if (body[key] === null) {
-        update[key] = null;
-      }
+    // Build the update object for non-key fields directly
+    const update: Record<string, string | null> = {};
+    for (const key of ["agencyName", "agencyLogo", "activeProvider", "activeModel"] as const) {
+      if (typeof body[key] === "string") update[key] = (body[key] as string).trim() || null;
+      else if (body[key] === null) update[key] = null;
+    }
+
+    // For API keys: skip entirely if absent or sentinel; allow empty string to clear
+    const apiKeyFields = ["geminiApiKey", "openaiApiKey", "anthropicApiKey", "apifyApiKey", "elevenlabsApiKey", "sarvamApiKey"] as const;
+    for (const key of apiKeyFields) {
+      if (body[key] === undefined || body[key] === SENTINEL) continue;
+      update[key] = (body[key] as string).trim() || null;
     }
 
     await Promise.all([

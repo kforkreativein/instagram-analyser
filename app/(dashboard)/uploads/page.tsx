@@ -201,42 +201,39 @@ export default function UploadsPage() {
     }
   }
 
-  function handleDelete(id: string) {
-    if (!confirm("Are you sure you want to delete this upload?")) return;
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
 
-    // Updates local state
-    const updated = (Array.isArray(recentUploads) ? recentUploads : []).filter(u => u.post.id !== id);
-    setRecentUploads(updated);
+    if (!confirm("Are you sure you want to delete this analysis?")) return;
 
-    // Updates localStorage
     try {
-      const raw = localStorage.getItem(ANALYZED_HISTORY_KEY);
-      if (raw) {
-        const parsed = (Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []) as SavedVideoData[];
-        const next = parsed.filter(item => item?.post?.id !== id);
-        localStorage.setItem(ANALYZED_HISTORY_KEY, JSON.stringify(next));
-      }
+      const res = await fetch(`/api/uploads/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        // Remove from DB card grid
+        setDbUploads(prev => prev.filter(item => item.id !== id));
 
-      // Also clean up cache
-      const analysesRaw = localStorage.getItem(ANALYSIS_CACHE_KEY);
-      if (analysesRaw) {
-        const cachedAnalyses = JSON.parse(analysesRaw);
-        delete cachedAnalyses[id];
-        localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify(cachedAnalyses));
-      }
+        // Clean up localStorage caches
+        const analysesRaw = localStorage.getItem(ANALYSIS_CACHE_KEY);
+        if (analysesRaw) {
+          const cached = JSON.parse(analysesRaw);
+          delete cached[id];
+          localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify(cached));
+        }
+        const postsRaw = localStorage.getItem("instagram-posts-cache");
+        if (postsRaw) {
+          const cached = JSON.parse(postsRaw);
+          delete cached[id];
+          localStorage.setItem("instagram-posts-cache", JSON.stringify(cached));
+        }
 
-      const postsRaw = localStorage.getItem("instagram-posts-cache");
-      if (postsRaw) {
-        const cachedPosts = JSON.parse(postsRaw);
-        delete cachedPosts[id];
-        localStorage.setItem("instagram-posts-cache", JSON.stringify(cachedPosts));
+        toast("success", "Deleted", "Analysis removed successfully.");
+      } else {
+        toast("error", "Deletion Failed", "Could not delete the analysis.");
       }
-
-      toast("success", "Upload Deleted", "The video has been removed from your history.");
     } catch {
-      toast("error", "Deletion Failed", "Could not remove the video from storage.");
+      toast("error", "Deletion Failed", "An error occurred while deleting.");
     }
-  }
+  };
 
   function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -400,6 +397,17 @@ export default function UploadsPage() {
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0D1017] via-[#0D1017]/40 to-transparent"></div>
                   </div>
+
+                  {/* DELETE BUTTON */}
+                  <button
+                    onClick={(e) => handleDelete(e, item.id)}
+                    className="absolute top-3 left-3 z-30 bg-black/60 backdrop-blur-md border border-white/10 rounded-md p-1.5 text-gray-400 hover:bg-red-500/80 hover:text-white transition-all opacity-0 group-hover:opacity-100 shadow-lg"
+                    title="Delete Analysis"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M18 6L6 18M6 6l12 12"></path>
+                    </svg>
+                  </button>
 
                   {/* TOP DATE BADGE */}
                   <div className="absolute top-3 right-3 z-20 bg-black/60 backdrop-blur-md border border-white/10 rounded-md px-2 py-1 font-['JetBrains_Mono'] text-[10px] text-gray-300 pointer-events-none">
