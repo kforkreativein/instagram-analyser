@@ -1,3 +1,5 @@
+export const maxDuration = 60;
+
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
@@ -66,20 +68,29 @@ function buildPrompt(body: GenerateScriptBody): string {
   const structureName = toStringSafe(body.structureName || body.storyStructure || body.styleTitle, "Problem Solver");
   const structureSteps = toStringSafe(body.structureSteps, "Hook -> Problem -> Agitation -> Solution -> CTA");
 
-  const wordCountTarget = Math.floor((parseInt(videoLength) || 30) * 2.5);
+  const targetSeconds = parseInt(videoLength) || 30;
+  const maxWordCount = Math.floor(targetSeconds * 2.5);
+  const minWordCount = Math.floor(targetSeconds * 2.0);
 
   return `You are an elite short-form video scriptwriter. Your job is to remix an existing transcript into a highly viral, new script.
+
+CRITICAL PACING CONSTRAINT:
+The user has requested a ${targetSeconds}-second video.
+To match a dynamic, fast-paced speaking style, your script MUST be between ${minWordCount} and ${maxWordCount} words in total length.
+Rules:
+1. DO NOT exceed ${maxWordCount} words under any circumstances.
+2. Cut all fluff. Every single word must earn its place.
+3. Count your words before returning the final output to ensure it fits the ${targetSeconds}s timeframe.
 
 CRITICAL INSTRUCTIONS:
 - LANGUAGE: Write the entire script strictly in ${language}. Translate the source if necessary.
 - GOAL/AUDIENCE: Optimize this script for ${videoGoal}. The target audience is '${targetAudience}'.
 - VIBE: Inject the emotion of '${emotion}' at an intensity level of ${emotionIntensity}/10.
-- LENGTH: The video is ${videoLength} seconds long. Keep the word count strictly around ${wordCountTarget} words.
 
 CRITICAL LAWS YOU MUST OBEY:
 1. STRICT LANGUAGE ENFORCEMENT: The final script MUST be written entirely in ${language}.
 2. NO VISUAL CUES: DO NOT write camera directions, subtitle notes, text pop-ups, B-roll instructions, or cover cards. Output ONLY the spoken words and the structural headers.
-3. EXACT LENGTH: Spoken text MUST be strictly around ${wordCountTarget} words.
+3. EXACT LENGTH: Spoken text MUST be between ${minWordCount} and ${maxWordCount} words. Do NOT exceed ${maxWordCount} words.
 
 SOURCE TRANSCRIPT:
 """

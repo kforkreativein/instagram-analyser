@@ -627,6 +627,15 @@ const HOOK_OPTIONS = [
   { title: "Direct Value" }
 ];
 
+function Spinner() {
+  return (
+    <svg className="animate-spin w-3 h-3 inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
 function ScriptsPageContent() {
   const searchParams = useSearchParams();
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -865,7 +874,13 @@ function ScriptsPageContent() {
   useEffect(() => {
     fetch("/api/settings")
       .then(r => r.json())
-      .then((data: { hasKeys?: boolean }) => { setSettingsHasKeys(!!data.hasKeys); })
+      .then((data: Record<string, boolean>) => {
+        // API keys are returned as boolean flags — treat as "has keys" if any provider is configured
+        setSettingsHasKeys(
+          !!(data.geminiApiKeySet || data.openaiApiKeySet || data.anthropicApiKeySet ||
+             data.apifyApiKeySet || data.elevenlabsApiKeySet || data.sarvamApiKeySet)
+        );
+      })
       .catch(() => {}); // silently fail — don't block anything
   }, []);
 
@@ -906,6 +921,7 @@ function ScriptsPageContent() {
   const [generatedCaption, setGeneratedCaption] = useState<string | null>(null);
   const [isGeneratingCaption, setIsGeneratingCaption] = useState(false);
   const [activeAction, setActiveAction] = useState<string | null>(null);
+  const isProcessing = !!activeAction;
   type BrainstormSuggestion = { title: string; suggestion: string; impact: string };
   type PacingSegment = { lineStart: number; lineEnd: number; status: 'Good' | 'Slow' | 'Critical'; note: string };
   type PacingData = { segments: PacingSegment[]; summary: string };
@@ -1097,7 +1113,17 @@ function ScriptsPageContent() {
         if (found.scriptJob) setScriptJob(found.scriptJob);
         if (found.directorsCut) setDirectorsCutData(found.directorsCut);
         if (found.prompts) setPromptDirectorData(found.prompts);
-        if (found.packaging) setPackagingData(found.packaging); // Load packaging data
+        if (found.packaging) setPackagingData(found.packaging);
+        if (found.metadata) {
+          const meta = found.metadata as any;
+          if (meta.editorSettings) {
+            if (meta.editorSettings.language) setActiveLanguage(meta.editorSettings.language);
+            if (meta.editorSettings.model) setActiveModel(meta.editorSettings.model);
+            if (typeof meta.editorSettings.emotion === "number") setEmotionIntensity(meta.editorSettings.emotion);
+            if (typeof meta.editorSettings.length === "number") setVideoLength(meta.editorSettings.length);
+          }
+          if (meta.research) setResearchData(meta.research);
+        }
         setScriptTitle(found.title || "New Script");
 
         const matchedHook = nextHookCards.find((c: any) => c.title === found.hook);
@@ -1133,10 +1159,20 @@ function ScriptsPageContent() {
             type: scriptType,
             hooks: abHooks.length > 0 ? abHooks : undefined,
             caption: generatedCaption || undefined,
+            repurposed: repurposedText || undefined,
             scriptJob: scriptJob || undefined,
             directorsCut: directorsCutData || undefined,
             prompts: promptDirectorData || undefined,
             packaging: packagingData || undefined,
+            metadata: {
+              editorSettings: {
+                language: activeLanguage,
+                model: activeModel,
+                emotion: emotionIntensity,
+                length: videoLength,
+              },
+              research: researchData || undefined,
+            },
             updatedAt: new Date().toISOString(),
           }),
         });
@@ -1148,7 +1184,7 @@ function ScriptsPageContent() {
     }, 3000);
 
     return () => clearTimeout(saveTimer);
-  }, [scriptTitle, script, selectedClientId, scriptId, searchParams, abHooks, generatedCaption, scriptJob, directorsCutData, promptDirectorData, packagingData]);
+  }, [scriptTitle, script, selectedClientId, scriptId, searchParams, abHooks, generatedCaption, repurposedText, scriptJob, directorsCutData, promptDirectorData, packagingData, activeLanguage, activeModel, emotionIntensity, videoLength, researchData]);
 
   useEffect(() => {
     const nextHookCards = buildHookCards();
@@ -1336,15 +1372,24 @@ function ScriptsPageContent() {
 
   async function handleInlineAIEdit(command: string) {
     if (!command.trim() || isProcessingInlineAI) return;
+
+    // Lock in state BEFORE the async call — prevents stale closure issues
+    // if the user clicks elsewhere while the request is in flight
+    const currentScript = script;
+    const startIdx = selection?.start ?? null;
+    const endIdx = selection?.end ?? null;
+    const currentSelectedText = selectedText;
+
     setIsProcessingInlineAI(true);
     try {
       const response = await fetch("/api/edit-selection", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fullScript: script,
-          selectedText: selectedText,
-          promptCommand: command
+          fullScript: currentScript,
+          selectedText: currentSelectedText,
+          promptCommand: command,
+          videoLength: videoLength,
         })
       });
 
@@ -1355,12 +1400,13 @@ function ScriptsPageContent() {
 
       const { replacement } = await response.json();
 
-      if (selection && selectedText) {
-        // Precision slice & stitch using exact cursor coordinates
-        const newScript = script.substring(0, selection.start) +
-                          replacement +
-                          script.substring(selection.end);
-        updateScriptAndHistory(newScript);
+      if (currentSelectedText && startIdx !== null && endIdx !== null) {
+        // Surgical stitch: everything before + AI text + everything after
+        const stitchedScript =
+          currentScript.substring(0, startIdx) +
+          replacement +
+          currentScript.substring(endIdx);
+        updateScriptAndHistory(stitchedScript);
         setSelectedText("");
         setSelection(null);
       } else {
@@ -3527,28 +3573,28 @@ LANGUAGE: ${activeLanguage}`;
 
 
           <div className="flex gap-[8px] mt-[10px] flex-wrap items-center">
-            <button onClick={() => void handlePostGenAction('pacing')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/60 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'pacing' ? '⏳ Analyzing...' : '⚖ Analyze Pacing'}
+            <button onClick={() => void handlePostGenAction('pacing')} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/60 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'pacing' ? <><Spinner /> Analyzing...</> : '⚖ Analyze Pacing'}
             </button>
             <button onClick={() => {
               if (!pacingData) { toast("error", "Pacing Required", "Please analyze pacing first so the AI knows what to cut."); return; }
               void handlePostGenAction('shorten');
-            }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/60 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'shorten' ? '⏳ Shortening...' : '✂️ Shorten Script'}
+            }} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-red-500/30 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/60 hover:shadow-[0_0_15px_rgba(239,68,68,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'shorten' ? <><Spinner /> Shortening...</> : '✂️ Shorten Script'}
             </button>
-            <button onClick={() => void handlePostGenAction('improve')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-emerald-500/30 text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-500/60 hover:shadow-[0_0_15px_rgba(16,185,129,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'improve' ? '⏳ Improving...' : pacingData ? '✦ Fix Pacing Issues' : '✦ Improve Script'}
+            <button onClick={() => void handlePostGenAction('improve')} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-emerald-500/30 text-emerald-400 bg-emerald-500/5 hover:bg-emerald-500/15 hover:border-emerald-500/60 hover:shadow-[0_0_15px_rgba(16,185,129,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'improve' ? <><Spinner /> Improving...</> : pacingData ? '✦ Fix Pacing Issues' : '✦ Improve Script'}
             </button>
             <button onClick={() => {
               setActiveAction('sharpen-hook');
               const text = script.trim();
               const hookMatch = text.match(/\[HOOK\]([\s\S]*?)(?=\[|$)/i);
               const originalHook = (hookMatch && hookMatch[1].trim()) || text.split('\n').filter(l => l.trim()).slice(0, 2).join('\n');
-              
-              fetch("/api/sharpen-hook", { 
-                method: "POST", 
-                headers: { "Content-Type": "application/json" }, 
-                body: JSON.stringify({ script, originalHook }) 
+
+              fetch("/api/sharpen-hook", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ script, originalHook })
               })
                 .then(r => r.json())
                 .then(d => {
@@ -3564,13 +3610,13 @@ LANGUAGE: ${activeLanguage}`;
                     const rest = lines.slice(hookLinesCount).join('\n');
                     setScript(newHook + '\n\n' + rest);
                   }
-                  setImprovementLog(p => ["Hook sharpened with viral framework", ...p]); 
-                  toast("success", "Hook Sharpened", "Viral hook applied."); 
+                  setImprovementLog(p => ["Hook sharpened with viral framework", ...p]);
+                  toast("success", "Hook Sharpened", "Viral hook applied.");
                 })
                 .catch(e => toast("error", "Failed", e.message))
                 .finally(() => setActiveAction(null));
-            }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-sky-500/30 text-sky-400 bg-sky-500/5 hover:bg-sky-500/15 hover:border-sky-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'sharpen-hook' ? '⏳ Sharpening...' : '🎣 Sharpen Hook'}
+            }} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-sky-500/30 text-sky-400 bg-sky-500/5 hover:bg-sky-500/15 hover:border-sky-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'sharpen-hook' ? <><Spinner /> Sharpening...</> : '🎣 Sharpen Hook'}
             </button>
             <button onClick={() => {
               setActiveAction('fix-structure');
@@ -3581,20 +3627,20 @@ LANGUAGE: ${activeLanguage}`;
                   setImprovementLog(p => ["Story structure improved", ...p]);
                   toast("success", "Structure Improved", "");
                 }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
-            }} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-orange-500/30 text-orange-400 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'fix-structure' ? '⏳ Restructuring...' : '🏗 Fix Structure'}
+            }} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-orange-500/30 text-orange-400 bg-orange-500/5 hover:bg-orange-500/15 hover:border-orange-500/60 font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'fix-structure' ? <><Spinner /> Restructuring...</> : '🏗 Fix Structure'}
             </button>
-            <button onClick={() => void handlePostGenAction('visuals')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-purple-500/30 text-purple-400 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-500/60 hover:shadow-[0_0_15px_rgba(168,85,247,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'visuals' ? '⏳ Generating Visuals...' : '◎ Generate Visual Cues'}
+            <button onClick={() => void handlePostGenAction('visuals')} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-purple-500/30 text-purple-400 bg-purple-500/5 hover:bg-purple-500/15 hover:border-purple-500/60 hover:shadow-[0_0_15px_rgba(168,85,247,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'visuals' ? <><Spinner /> Generating...</> : '◎ Generate Visual Cues'}
             </button>
-            <button onClick={() => void handlePostGenAction('prompts')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-cyan-500/30 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/15 hover:border-cyan-500/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'prompts' ? '⏳ Generating Prompts...' : 'Image/Video Prompts List'}
+            <button onClick={() => void handlePostGenAction('prompts')} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-cyan-500/30 text-cyan-400 bg-cyan-500/5 hover:bg-cyan-500/15 hover:border-cyan-500/60 hover:shadow-[0_0_15px_rgba(6,182,212,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'prompts' ? <><Spinner /> Generating...</> : 'Image/Video Prompts List'}
             </button>
-            <button onClick={() => void handlePostGenAction('caption')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-amber-500/30 text-amber-400 bg-amber-500/5 hover:bg-amber-500/15 hover:border-amber-500/60 hover:shadow-[0_0_15px_rgba(245,158,11,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'caption' ? '⏳ Generating Caption...' : '📝 Generate Caption'}
+            <button onClick={() => void handlePostGenAction('caption')} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-amber-500/30 text-amber-400 bg-amber-500/5 hover:bg-amber-500/15 hover:border-amber-500/60 hover:shadow-[0_0_15px_rgba(245,158,11,0.15)] font-['DM_Sans'] text-[11px] font-[500] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'caption' ? <><Spinner /> Generating Caption...</> : '📝 Generate Caption'}
             </button>
-            <button onClick={() => void handlePostGenAction('brainstorm')} disabled={!!activeAction || !script.trim()} className="relative z-[99] pointer-events-auto px-4 py-2 rounded-full border border-violet-400/40 text-violet-300 bg-violet-500/5 hover:bg-violet-500/15 hover:border-violet-400/70 hover:shadow-[0_0_15px_rgba(167,139,250,0.2)] font-['DM_Sans'] text-[11px] font-[700] cursor-pointer transition-all disabled:opacity-50">
-              {activeAction === 'brainstorm' ? '⏳ Brainstorming...' : '✦ Suggest 1% Improvement'}
+            <button onClick={() => void handlePostGenAction('brainstorm')} disabled={isProcessing || !script.trim()} className="relative z-[99] pointer-events-auto flex items-center gap-1.5 px-4 py-2 rounded-full border border-violet-400/40 text-violet-300 bg-violet-500/5 hover:bg-violet-500/15 hover:border-violet-400/70 hover:shadow-[0_0_15px_rgba(167,139,250,0.2)] font-['DM_Sans'] text-[11px] font-[700] cursor-pointer transition-all disabled:opacity-50">
+              {activeAction === 'brainstorm' ? <><Spinner /> Brainstorming...</> : '✦ Suggest 1% Improvement'}
             </button>
           </div>
 

@@ -1,3 +1,5 @@
+export const maxDuration = 60;
+
 import { NextResponse } from 'next/server';
 
 function chunkTextSafely(text: string, maxCharLimit = 400) {
