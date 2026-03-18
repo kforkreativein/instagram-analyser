@@ -112,7 +112,15 @@ export default function SettingsPage() {
         if (data.activeProvider) setActiveProvider(data.activeProvider.toLowerCase() as ProviderOption);
         if (data.activeModel) setActiveModel(data.activeModel);
 
-        // API keys are never returned from the server — use boolean flags to show saved state
+        // API keys are never returned — pre-fill with sentinel so user sees "••••••••" in the field
+        const SENTINEL = "••••••••";
+        if (data.geminiApiKeySet) setGeminiApiKey(SENTINEL);
+        if (data.openaiApiKeySet) setOpenaiApiKey(SENTINEL);
+        if (data.anthropicApiKeySet) setAnthropicApiKey(SENTINEL);
+        if (data.apifyApiKeySet) setApifyApiKey(SENTINEL);
+        if (data.elevenlabsApiKeySet) setElevenLabsApiKey(SENTINEL);
+        if (data.sarvamApiKeySet) setSarvamApiKey(SENTINEL);
+
         setServerSavedKeys({
           geminiApiKey: !!data.geminiApiKeySet,
           openaiApiKey: !!data.openaiApiKeySet,
@@ -409,8 +417,10 @@ export default function SettingsPage() {
                     <input
                       type={showKeys.apify ? "text" : "password"}
                       value={apifyApiKey}
+                      onFocus={() => { if (apifyApiKey === "••••••••") setApifyApiKey(""); }}
+                      onBlur={() => { if (apifyApiKey === "" && serverSavedKeys.apifyApiKey) setApifyApiKey("••••••••"); }}
                       onChange={(e) => setApifyApiKey(e.target.value)}
-                      placeholder={serverSavedKeys.apifyApiKey ? "••••••••" : "apify_api_..."}
+                      placeholder="Paste new key to update..."
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -464,8 +474,10 @@ export default function SettingsPage() {
                     <input
                       type={showKeys.gemini ? "text" : "password"}
                       value={geminiApiKey}
+                      onFocus={() => { if (geminiApiKey === "••••••••") setGeminiApiKey(""); }}
+                      onBlur={() => { if (geminiApiKey === "" && serverSavedKeys.geminiApiKey) setGeminiApiKey("••••••••"); }}
                       onChange={(e) => setGeminiApiKey(e.target.value)}
-                      placeholder={serverSavedKeys.geminiApiKey ? "••••••••" : "AIza..."}
+                      placeholder="Paste new key to update..."
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -483,8 +495,10 @@ export default function SettingsPage() {
                     <input
                       type={showKeys.openai ? "text" : "password"}
                       value={openaiApiKey}
+                      onFocus={() => { if (openaiApiKey === "••••••••") setOpenaiApiKey(""); }}
+                      onBlur={() => { if (openaiApiKey === "" && serverSavedKeys.openaiApiKey) setOpenaiApiKey("••••••••"); }}
                       onChange={(e) => setOpenaiApiKey(e.target.value)}
-                      placeholder={serverSavedKeys.openaiApiKey ? "••••••••" : "sk-..."}
+                      placeholder="Paste new key to update..."
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -502,8 +516,10 @@ export default function SettingsPage() {
                     <input
                       type={showKeys.anthropic ? "text" : "password"}
                       value={anthropicApiKey}
+                      onFocus={() => { if (anthropicApiKey === "••••••••") setAnthropicApiKey(""); }}
+                      onBlur={() => { if (anthropicApiKey === "" && serverSavedKeys.anthropicApiKey) setAnthropicApiKey("••••••••"); }}
                       onChange={(e) => setAnthropicApiKey(e.target.value)}
-                      placeholder={serverSavedKeys.anthropicApiKey ? "••••••••" : "sk-ant-..."}
+                      placeholder="Paste new key to update..."
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -539,8 +555,10 @@ export default function SettingsPage() {
                     <input
                       type={showKeys.elevenlabs ? "text" : "password"}
                       value={elevenLabsApiKey}
+                      onFocus={() => { if (elevenLabsApiKey === "••••••••") setElevenLabsApiKey(""); }}
+                      onBlur={() => { if (elevenLabsApiKey === "" && serverSavedKeys.elevenlabsApiKey) setElevenLabsApiKey("••••••••"); }}
                       onChange={(e) => setElevenLabsApiKey(e.target.value)}
-                      placeholder={serverSavedKeys.elevenlabsApiKey ? "••••••••" : "sk_..."}
+                      placeholder="Paste new key to update..."
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -558,8 +576,10 @@ export default function SettingsPage() {
                     <input
                       type={showKeys.sarvam ? "text" : "password"}
                       value={sarvamApiKey}
+                      onFocus={() => { if (sarvamApiKey === "••••••••") setSarvamApiKey(""); }}
+                      onBlur={() => { if (sarvamApiKey === "" && serverSavedKeys.sarvamApiKey) setSarvamApiKey("••••••••"); }}
                       onChange={(e) => setSarvamApiKey(e.target.value)}
-                      placeholder={serverSavedKeys.sarvamApiKey ? "••••••••" : "Enter Sarvam API key"}
+                      placeholder="Paste new key to update..."
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}

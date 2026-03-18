@@ -693,6 +693,8 @@ function ScriptsPageContent() {
   const [hookSearchQuery, setHookSearchQuery] = useState("");
   const [hookTagFilter, setHookTagFilter] = useState<string>("All");
   const [script, setScript] = useState("");
+  const [scriptHistory, setScriptHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
   const [selection, setSelection] = useState<EditorSelection | null>(null);
   const [showAskInput, setShowAskInput] = useState(false);
   const [aiCommand, setAiCommand] = useState("");
@@ -803,6 +805,13 @@ function ScriptsPageContent() {
   const [inlineAICommand, setInlineAICommand] = useState("");
   const [isProcessingInlineAI, setIsProcessingInlineAI] = useState(false);
 
+  const updateScriptAndHistory = (newContent: string) => {
+    const newHistory = scriptHistory.slice(0, historyIndex + 1);
+    newHistory.push(newContent);
+    setScriptHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+    setScript(newContent);
+  };
 
   const WRITING_MODES: { id: WritingMode; icon: string; label: string; placeholder: string }[] = [
     { id: "polisher", icon: "✍️", label: "The Polisher", placeholder: "Paste your clunky draft here..." },
@@ -1078,7 +1087,10 @@ function ScriptsPageContent() {
         setStyleCards(nextStyleCards);
 
         setTopic(found.topic || "");
-        setScript(found.content || "");
+        const initialScript = found.content || "";
+        setScript(initialScript);
+        setScriptHistory([initialScript]);
+        setHistoryIndex(0);
         if (found.hooks && Array.isArray(found.hooks)) setAbHooks(found.hooks);
         if (found.caption) setGeneratedCaption(found.caption);
         if (found.repurposed) setRepurposedText(found.repurposed);
@@ -1308,7 +1320,7 @@ function ScriptsPageContent() {
       if (!replacement) throw new Error("AI returned an empty replacement");
 
       const nextScriptText = script.slice(0, selection.start) + replacement + script.slice(selection.end);
-      setScript(nextScriptText);
+      updateScriptAndHistory(nextScriptText);
       
       setSelection(null);
       setAiCommand("");
@@ -1342,14 +1354,18 @@ function ScriptsPageContent() {
       }
 
       const { replacement } = await response.json();
-      
-      if (selectedText) {
-        // Replace selection in the script
-        setScript(p => p.replace(selectedText, replacement));
+
+      if (selection && selectedText) {
+        // Precision slice & stitch using exact cursor coordinates
+        const newScript = script.substring(0, selection.start) +
+                          replacement +
+                          script.substring(selection.end);
+        updateScriptAndHistory(newScript);
         setSelectedText("");
+        setSelection(null);
       } else {
-        // Replace entire script
-        setScript(replacement);
+        // No selection — rewrite entire script
+        updateScriptAndHistory(replacement);
       }
       toast("success", "Script Updated", "AI changes applied.");
       setInlineAICommand("");
@@ -1584,7 +1600,7 @@ function ScriptsPageContent() {
         console.log("5. Data received from API:", data);
 
         if (data.script) {
-          setScript(data.script);
+          updateScriptAndHistory(data.script);
           console.log("6. SUCCESS! Script set in UI.");
           toast("success", "Remix Engineered", `New ${tweakAttribute} strategy generated.`);
         } else {
@@ -1701,7 +1717,7 @@ function ScriptsPageContent() {
 
       const responseData = (await response.json()) as { script?: string };
       const generatedText = (responseData.script || "").trim();
-      setScript(generatedText);
+      updateScriptAndHistory(generatedText);
       toast("success", "Script Generated", "Your viral script is ready.");
 
       let generatedTitle = "New Script";
@@ -1820,7 +1836,7 @@ function ScriptsPageContent() {
 
       const payload = (await response.json()) as { text?: string };
       const newText = (payload.text || "").trim();
-      setScript(newText);
+      updateScriptAndHistory(newText);
       toast("success", "Script Improved", "Your script has been refined.");
     } catch (err) {
       setImproveError(err instanceof Error ? err.message : "Improve script failed");
@@ -1856,12 +1872,12 @@ function ScriptsPageContent() {
       if (!response.ok) throw new Error(data.error || "Action failed");
 
       if (action === 'improve') {
-        setScript(data.result);
+        updateScriptAndHistory(data.result);
         setPacingData(null);
         setImprovementLog(prev => ["Script rewritten for +10% retention", ...prev]);
         toast("success", "Script Improved", "Retention-focused rewrite applied.");
       } else if (action === 'shorten') {
-        setScript(data.result);
+        updateScriptAndHistory(data.result);
         setPacingData(null);
         setImprovementLog(prev => ["Script shortened (15-20% word reduction)", ...prev]);
         toast("success", "Script Shortened", "Fluff cut. Retention speed increased.");
@@ -1911,7 +1927,7 @@ function ScriptsPageContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Apply failed");
-      setScript(data.newScript);
+      updateScriptAndHistory(data.newScript);
       setImprovementLog(prev => [suggestionObj.title, ...prev]);
       setBrainstormSuggestions(prev => prev ? prev.filter(s => s.title !== suggestionObj.title) : null);
       toast("success", "Improvement Applied", suggestionObj.title);
@@ -2080,7 +2096,7 @@ function ScriptsPageContent() {
       }
 
       const payload = (await response.json()) as { text?: string };
-      setScript((payload.text || "").trim());
+      updateScriptAndHistory((payload.text || "").trim());
       setPacingData(null);
       toast("success", "Script Shortened", "Your script is now more concise.");
     } catch (err) {
@@ -2424,10 +2440,10 @@ ${text}`;
       if (firstBreak > 0) {
         // Find end of the sentence delimiter
         const delimEnd = text[firstBreak] === "\n" ? firstBreak + 1 : firstBreak + 2;
-        setScript(newHook + " " + text.slice(delimEnd));
+        updateScriptAndHistory(newHook + " " + text.slice(delimEnd));
       } else {
         // Script is a single sentence — replace entirely
-        setScript(newHook);
+        updateScriptAndHistory(newHook);
       }
       toast("success", "New Hook Generated", `Hook generated with style: ${style}.`);
     } catch (err) {
@@ -2495,14 +2511,14 @@ ${text}`;
   function applyHookToScript(newHookText: string, index: number) {
     const text = script.trim();
     if (!text) {
-      setScript(newHookText);
+      updateScriptAndHistory(newHookText);
     } else {
       const firstBreak = text.search(/[.!?]\s|\n/);
       if (firstBreak > 0) {
         const delimEnd = text[firstBreak] === "\n" ? firstBreak + 1 : firstBreak + 2;
-        setScript(newHookText.trim() + " " + text.slice(delimEnd));
+        updateScriptAndHistory(newHookText.trim() + " " + text.slice(delimEnd));
       } else {
-        setScript(newHookText.trim());
+        updateScriptAndHistory(newHookText.trim());
       }
     }
 
@@ -3457,7 +3473,27 @@ LANGUAGE: ${activeLanguage}`;
                     <p className="text-[11px] text-[#A78BFA] font-['DM_Sans'] line-clamp-1 border-l-2 border-[#A78BFA] pl-2">
                       <span className="font-bold opacity-70 mr-1">Editing:</span> "{selectedText}"
                     </p>
-                    <button onClick={() => setSelectedText("")} className="text-[#8892A4] hover:text-white text-[10px]">✕ Clear</button>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => { if (historyIndex > 0) { setHistoryIndex(historyIndex - 1); setScript(scriptHistory[historyIndex - 1]); } }}
+                          disabled={historyIndex <= 0}
+                          className="p-1.5 text-[#8892A4] hover:text-white hover:bg-white/10 rounded transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                          title="Undo"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><polyline points="3 3 3 8 8 8"></polyline></svg>
+                        </button>
+                        <button
+                          onClick={() => { if (historyIndex < scriptHistory.length - 1) { setHistoryIndex(historyIndex + 1); setScript(scriptHistory[historyIndex + 1]); } }}
+                          disabled={historyIndex >= scriptHistory.length - 1}
+                          className="p-1.5 text-[#8892A4] hover:text-white hover:bg-white/10 rounded transition-colors disabled:opacity-30 disabled:hover:bg-transparent"
+                          title="Redo"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><polyline points="21 3 21 8 16 8"></polyline></svg>
+                        </button>
+                      </div>
+                      <button onClick={() => setSelectedText("")} className="text-[#8892A4] hover:text-white text-[10px]">✕ Clear</button>
+                    </div>
                   </div>
                 )}
                 <div className="flex gap-2 relative">
@@ -3521,7 +3557,7 @@ LANGUAGE: ${activeLanguage}`;
                   const newHook = d.updatedScript;
                   // Replace only the hook part if possible
                   if (hookMatch) {
-                    setScript(text.replace(hookMatch[1].trim(), newHook));
+                    updateScriptAndHistory(text.replace(hookMatch[1].trim(), newHook));
                   } else {
                     const lines = text.split('\n');
                     const hookLinesCount = originalHook.split('\n').length;
@@ -3541,7 +3577,7 @@ LANGUAGE: ${activeLanguage}`;
               fetch("/api/fix-structure", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ script }) })
                 .then(r => r.json()).then(d => {
                   if (!d || (!d.updatedScript && !d.result)) throw new Error("Invalid response from AI");
-                  setScript(d.updatedScript || d.result);
+                  updateScriptAndHistory(d.updatedScript || d.result);
                   setImprovementLog(p => ["Story structure improved", ...p]);
                   toast("success", "Structure Improved", "");
                 }).catch(e => toast("error", "Failed", e.message)).finally(() => setActiveAction(null));
