@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Apify request timed out." }, { status: 504 });
     }
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch profiles." },
+      { error: "Failed to fetch profiles." },
       { status: 500 }
     );
   }

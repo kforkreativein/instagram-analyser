@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error("[WATCHLIST_POST]", error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Unable to save watchlist." },
+            { error: "Unable to save watchlist." },
             { status: 500 },
         );
     }
@@ -139,7 +139,7 @@ export async function DELETE(request: NextRequest) {
     } catch (error) {
         console.error("[WATCHLIST_DELETE]", error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Unable to update watchlist." },
+            { error: "Unable to update watchlist." },
             { status: 500 },
         );
     }

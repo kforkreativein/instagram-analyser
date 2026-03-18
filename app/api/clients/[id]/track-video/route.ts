@@ -44,7 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     let title = "";
     let thumbnailUrl = "";
 
-    console.log(`[Track-Video] Scraping ${platform} URL: ${videoUrl}`);
+    console.log(`[Track-Video] Scraping ${platform} video`);
 
     if (platform === "Instagram") {
       const apifyUrl = `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${apifyToken}`;
@@ -186,7 +186,7 @@ Return ONLY valid JSON. No markdown formatting blocks.`;
     return NextResponse.json(newVideo);
   } catch (error: any) {
     console.error("Track Video API Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to track video" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to track video" }, { status: 500 });
   }
 }
 
@@ -227,6 +227,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Delete Video API Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to delete video." }, { status: 500 });
+    return NextResponse.json({ error: "Failed to delete video." }, { status: 500 });
   }
 }

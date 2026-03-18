@@ -53,7 +53,7 @@ ${scriptBody}
   } catch (error: any) {
     console.error("Caption Generation Error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to generate caption" },
+      { error: "Failed to generate caption" },
       { status: 500 },
     );
   }

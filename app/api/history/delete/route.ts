@@ -47,7 +47,7 @@ export async function DELETE(request: NextRequest) {
   } catch (error) {
     console.error("[HISTORY_DELETE]", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Delete failed" },
+      { error: "Delete failed" },
       { status: 500 },
     );
   }

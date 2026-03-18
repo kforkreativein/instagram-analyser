@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error("[SCRIPTS_DELETE]", error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Delete failed" },
+            { error: "Delete failed" },
             { status: 500 },
         );
     }

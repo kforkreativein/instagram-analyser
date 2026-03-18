@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, count: safePayload.items.length });
     } catch (error) {
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Write failed" },
+            { error: "Write failed" },
             { status: 500 },
         );
     }

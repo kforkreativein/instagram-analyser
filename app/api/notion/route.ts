@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ success: true, url: data.url || "" });
     } catch (error) {
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Notion sync failed" },
+            { error: "Notion sync failed" },
             { status: 500 },
         );
     }

@@ -938,7 +938,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("ANALYSIS FAILED:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error" },
+      { error: "Unknown error" },
       { status: 500 },
     );
   }

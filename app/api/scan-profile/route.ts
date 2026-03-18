@@ -161,6 +161,9 @@ export async function POST(request: NextRequest) {
         if (!username) {
             return NextResponse.json({ error: "username is required" }, { status: 400 });
         }
+        if (!/^[a-zA-Z0-9._]{1,30}$/.test(username)) {
+            return NextResponse.json({ error: "Invalid Instagram username" }, { status: 400 });
+        }
 
         // Fetch user's Apify API key from database
         let apifyApiKey = (body.apifyApiKey || "").trim(); // fallback to body if provided
@@ -198,9 +201,10 @@ export async function POST(request: NextRequest) {
 
             if (!response.ok) {
                 const text = await response.text().catch(() => "");
+                console.error(`[scan-profile] Apify error ${response.status}:`, text.slice(0, 500));
                 return NextResponse.json(
-                    { error: `Apify error ${response.status}: ${text.slice(0, 200)}` },
-                    { status: response.status },
+                    { error: "Profile scan failed. Check your Apify API key and try again." },
+                    { status: response.status >= 500 ? 502 : response.status },
                 );
             }
 
@@ -259,8 +263,9 @@ export async function POST(request: NextRequest) {
             outliers,
         });
     } catch (error) {
+        console.error("[scan-profile] Unexpected error:", error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Scan failed" },
+            { error: "Scan failed. Please try again." },
             { status: 500 },
         );
     }

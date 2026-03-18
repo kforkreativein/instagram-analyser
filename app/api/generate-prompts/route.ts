@@ -40,6 +40,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ prompts });
   } catch (error) {
     console.error("Generate Prompts Error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to generate prompts" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to generate prompts" }, { status: 500 });
   }
 }

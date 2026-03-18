@@ -199,7 +199,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unexpected script generation error" },
+      { error: "Unexpected script generation error" },
       { status: 500 },
     );
   }

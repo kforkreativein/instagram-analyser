@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unexpected inline edit error" },
+      { error: "Unexpected inline edit error" },
       { status: 500 },
     );
   }

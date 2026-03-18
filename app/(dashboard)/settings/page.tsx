@@ -103,28 +103,23 @@ export default function SettingsPage() {
       .then((data) => {
         if (!data) return;
         
-        // Keys & Config
-        if (data.geminiApiKey) setGeminiApiKey(data.geminiApiKey);
-        if (data.openaiApiKey) setOpenaiApiKey(data.openaiApiKey);
-        if (data.anthropicApiKey) setAnthropicApiKey(data.anthropicApiKey);
-        if (data.apifyApiKey) setApifyApiKey(data.apifyApiKey);
-        if (data.elevenlabsApiKey) setElevenLabsApiKey(data.elevenlabsApiKey);
-        if (data.sarvamApiKey) setSarvamApiKey(data.sarvamApiKey);
-        
         // Account Info
         if (data.name) setName(data.name);
         if (data.agencyName) setAgencyName(data.agencyName);
         if (data.agencyLogo) setAgencyLogoPreview(data.agencyLogo);
-        
+
         // Provider & Model
         if (data.activeProvider) setActiveProvider(data.activeProvider.toLowerCase() as ProviderOption);
         if (data.activeModel) setActiveModel(data.activeModel);
 
+        // API keys are never returned from the server — use boolean flags to show saved state
         setServerSavedKeys({
-          geminiApiKey: !!data.geminiApiKey,
-          openaiApiKey: !!data.openaiApiKey,
-          anthropicApiKey: !!data.anthropicApiKey,
-          apifyApiKey: !!data.apifyApiKey,
+          geminiApiKey: !!data.geminiApiKeySet,
+          openaiApiKey: !!data.openaiApiKeySet,
+          anthropicApiKey: !!data.anthropicApiKeySet,
+          apifyApiKey: !!data.apifyApiKeySet,
+          elevenlabsApiKey: !!data.elevenlabsApiKeySet,
+          sarvamApiKey: !!data.sarvamApiKeySet,
         });
       });
   }, []);
@@ -415,7 +410,7 @@ export default function SettingsPage() {
                       type={showKeys.apify ? "text" : "password"}
                       value={apifyApiKey}
                       onChange={(e) => setApifyApiKey(e.target.value)}
-                      placeholder="apify_api_..."
+                      placeholder={serverSavedKeys.apifyApiKey ? "••••••••" : "apify_api_..."}
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -470,6 +465,7 @@ export default function SettingsPage() {
                       type={showKeys.gemini ? "text" : "password"}
                       value={geminiApiKey}
                       onChange={(e) => setGeminiApiKey(e.target.value)}
+                      placeholder={serverSavedKeys.geminiApiKey ? "••••••••" : "AIza..."}
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -488,6 +484,7 @@ export default function SettingsPage() {
                       type={showKeys.openai ? "text" : "password"}
                       value={openaiApiKey}
                       onChange={(e) => setOpenaiApiKey(e.target.value)}
+                      placeholder={serverSavedKeys.openaiApiKey ? "••••••••" : "sk-..."}
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -506,7 +503,7 @@ export default function SettingsPage() {
                       type={showKeys.anthropic ? "text" : "password"}
                       value={anthropicApiKey}
                       onChange={(e) => setAnthropicApiKey(e.target.value)}
-                      placeholder="Enter your Anthropic API key"
+                      placeholder={serverSavedKeys.anthropicApiKey ? "••••••••" : "sk-ant-..."}
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -543,6 +540,7 @@ export default function SettingsPage() {
                       type={showKeys.elevenlabs ? "text" : "password"}
                       value={elevenLabsApiKey}
                       onChange={(e) => setElevenLabsApiKey(e.target.value)}
+                      placeholder={serverSavedKeys.elevenlabsApiKey ? "••••••••" : "sk_..."}
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}
@@ -561,6 +559,7 @@ export default function SettingsPage() {
                       type={showKeys.sarvam ? "text" : "password"}
                       value={sarvamApiKey}
                       onChange={(e) => setSarvamApiKey(e.target.value)}
+                      placeholder={serverSavedKeys.sarvamApiKey ? "••••••••" : "Enter Sarvam API key"}
                       autoComplete="new-password"
                       data-1p-ignore="true"
                       spellCheck={false}

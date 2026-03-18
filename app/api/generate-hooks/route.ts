@@ -79,6 +79,6 @@ ${scriptBody}`;
         return NextResponse.json(parsedHooks);
     } catch (error: any) {
         console.error("Hook Generation Error:", error);
-        return NextResponse.json({ error: error.message || "Failed to generate hooks" }, { status: 500 });
+        return NextResponse.json({ error: "Failed to generate hooks" }, { status: 500 });
     }
 }

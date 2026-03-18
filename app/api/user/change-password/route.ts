@@ -18,6 +18,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing password fields" }, { status: 400 });
     }
 
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters and include a number and special character." },
+        { status: 400 }
+      );
+    }
+
     const user = await prisma.user.findUnique({ where: { email: session.user.email } });
 
     if (!user || !user.password) {

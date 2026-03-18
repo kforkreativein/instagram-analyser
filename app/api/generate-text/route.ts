@@ -173,7 +173,7 @@ Return ONLY the final script text. Do not include introductory filler. Output in
         }
 
         return NextResponse.json(
-            { error: error.message || "Text generation failed" },
+            { error: "Text generation failed" },
             { status: 500 },
         );
     }

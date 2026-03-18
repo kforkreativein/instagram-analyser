@@ -49,7 +49,7 @@ CRITICAL RULES:
     } catch (error) {
         console.error("Edit selection error:", error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Unexpected edit error" },
+            { error: "Unexpected edit error" },
             { status: 500 },
         );
     }

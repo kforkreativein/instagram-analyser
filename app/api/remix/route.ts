@@ -89,6 +89,6 @@ You MUST ensure the new generated script heavily over-indexes on this specific f
     }
   } catch (error: any) {
     console.error("REMIX API CRASH:", error);
-    return NextResponse.json({ error: "Backend failed to process remix.", details: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Backend failed to process remix." }, { status: 500 });
   }
 }

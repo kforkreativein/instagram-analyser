@@ -80,6 +80,6 @@ The array should cover the script from start to finish. Language: ${language}.`;
       return NextResponse.json({ error: "Failed to parse visual cues JSON", raw: cleaned }, { status: 500 });
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Visual cues generation failed" }, { status: 500 });
+    return NextResponse.json({ error: "Visual cues generation failed" }, { status: 500 });
   }
 }

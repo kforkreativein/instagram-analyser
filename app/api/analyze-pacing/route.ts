@@ -66,6 +66,6 @@ Example: ["This is a repeated sentence.", "This part is fluff."]`;
       return NextResponse.json({ error: "Failed to parse pacing analysis JSON", raw: cleaned }, { status: 500 });
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Pacing analysis failed" }, { status: 500 });
+    return NextResponse.json({ error: "Pacing analysis failed" }, { status: 500 });
   }
 }

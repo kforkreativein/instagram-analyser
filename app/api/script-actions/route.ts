@@ -108,6 +108,6 @@ Return ONLY a valid JSON array. No markdown. No extra text. Format:
     return NextResponse.json({ result: output });
   } catch (error: any) {
     console.error("SCRIPT ACTION API CRASH:", error);
-    return NextResponse.json({ error: "Backend failed to process action", details: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Backend failed to process action" }, { status: 500 });
   }
 }

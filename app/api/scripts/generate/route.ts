@@ -175,6 +175,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ script, engine, model });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Script generation error" }, { status: 500 });
+    return NextResponse.json({ error: "Script generation error" }, { status: 500 });
   }
 }

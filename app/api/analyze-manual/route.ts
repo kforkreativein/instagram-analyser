@@ -639,7 +639,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to analyze manual upload" },
+      { error: "Failed to analyze manual upload" },
       { status: 500 },
     );
   }

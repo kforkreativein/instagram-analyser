@@ -72,6 +72,6 @@ The score should be based on how much it forces the viewer to keep watching. Sug
       return NextResponse.json({ error: "Failed to parse hook rating JSON", raw: cleaned }, { status: 500 });
     }
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Hook rating failed" }, { status: 500 });
+    return NextResponse.json({ error: "Hook rating failed" }, { status: 500 });
   }
 }

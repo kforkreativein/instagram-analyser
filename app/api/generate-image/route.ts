@@ -53,7 +53,7 @@ export async function POST(req: Request) {
         console.error("Image Generation Error:", error);
         return NextResponse.json({
             error: true,
-            message: error.message || "Failed to generate thumbnails."
+            message: "Failed to generate thumbnails."
         }, { status: 500 });
     }
 }

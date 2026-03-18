@@ -57,7 +57,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             `https://api.apify.com/v2/acts/apify~instagram-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
             { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), cache: "no-store" }
           );
-          if (!apifyRes.ok) throw new Error(`Apify IG Error: ${await apifyRes.text()}`);
+          if (!apifyRes.ok) {
+            const errText = await apifyRes.text().catch(() => "");
+            console.error(`[refresh-metrics] Apify IG error ${apifyRes.status}:`, errText.slice(0, 500));
+            throw new Error("Instagram metrics refresh failed");
+          }
           const items: any[] = await apifyRes.json();
 
           items.forEach((item: any) => {
@@ -87,7 +91,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             `https://api.apify.com/v2/acts/apify~youtube-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
             { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), cache: "no-store" }
           );
-          if (!apifyRes.ok) throw new Error(`Apify YT Error: ${await apifyRes.text()}`);
+          if (!apifyRes.ok) {
+            const errText = await apifyRes.text().catch(() => "");
+            console.error(`[refresh-metrics] Apify YT error ${apifyRes.status}:`, errText.slice(0, 500));
+            throw new Error("YouTube metrics refresh failed");
+          }
           const items: any[] = await apifyRes.json();
 
           items.forEach((item: any) => {
@@ -114,6 +122,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ success: true, message: "Metrics refreshed" });
   } catch (error: any) {
     console.error("Refresh Analytics API Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to refresh analytics" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to refresh analytics" }, { status: 500 });
   }
 }

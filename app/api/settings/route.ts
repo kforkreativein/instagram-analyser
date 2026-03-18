@@ -26,19 +26,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({});
     }
 
-    // Return actual key values so the frontend can populate form fields
     return NextResponse.json({
       name: user?.name ?? "",
-      geminiApiKey: settings?.geminiApiKey ?? "",
-      openaiApiKey: settings?.openaiApiKey ?? "",
-      anthropicApiKey: settings?.anthropicApiKey ?? "",
-      apifyApiKey: settings?.apifyApiKey ?? "",
-      elevenlabsApiKey: settings?.elevenlabsApiKey ?? "",
-      sarvamApiKey: settings?.sarvamApiKey ?? "",
       agencyName: settings?.agencyName ?? "",
       agencyLogo: settings?.agencyLogo ?? "",
       activeProvider: settings?.activeProvider ?? "Gemini",
       activeModel: settings?.activeModel ?? "Gemini 2.5 Flash",
+      // API keys are never returned — only boolean presence flags
+      geminiApiKeySet: !!settings?.geminiApiKey,
+      openaiApiKeySet: !!settings?.openaiApiKey,
+      anthropicApiKeySet: !!settings?.anthropicApiKey,
+      apifyApiKeySet: !!settings?.apifyApiKey,
+      elevenlabsApiKeySet: !!settings?.elevenlabsApiKey,
+      sarvamApiKeySet: !!settings?.sarvamApiKey,
     });
   } catch (error) {
     return NextResponse.json(
@@ -69,13 +69,16 @@ export async function PUT(request: NextRequest) {
 
     for (const key of allowed) {
       if (typeof body[key] === "string") {
-        update[key] = (body[key] as string).trim() || null;
+        const val = (body[key] as string).trim();
+        // Only update the key if the user provided a non-empty value
+        // (empty string means "don't change" since we never send keys back)
+        if (val) update[key] = val;
       } else if (body[key] === null) {
         update[key] = null;
       }
     }
 
-    const [settings] = await Promise.all([
+    await Promise.all([
       prisma.settings.upsert({
         where: { userId: session.user.id },
         update: update,
@@ -87,7 +90,7 @@ export async function PUT(request: NextRequest) {
       }) : Promise.resolve()
     ]);
 
-    return NextResponse.json({ success: true, settings });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Settings update error:", error);
     return NextResponse.json(

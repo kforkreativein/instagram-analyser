@@ -81,7 +81,7 @@ Format EXACTLY as valid JSON.`;
         });
     } catch (error: any) {
         return NextResponse.json(
-            { error: true, message: error.message || "Research failed" },
+            { error: true, message: "Research failed" },
             { status: 500 },
         );
     }

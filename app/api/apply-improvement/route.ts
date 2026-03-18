@@ -56,6 +56,6 @@ Return ONLY the updated script. No commentary, no markdown, no extra text.`;
     return NextResponse.json({ newScript });
   } catch (error: any) {
     console.error("Apply Improvement Error:", error);
-    return NextResponse.json({ error: error.message || "Apply failed" }, { status: 500 });
+    return NextResponse.json({ error: "Apply failed" }, { status: 500 });
   }
 }

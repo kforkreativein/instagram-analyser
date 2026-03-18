@@ -50,6 +50,6 @@ export async function POST(req: Request) {
 
   } catch (error) {
     console.error("Suggest Improvements API Error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to parse suggestions" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to parse suggestions" }, { status: 500 });
   }
 }

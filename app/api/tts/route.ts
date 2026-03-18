@@ -81,6 +81,6 @@ export async function POST(req: Request) {
 
     } catch (error: any) {
         console.error("TTS Stitching Error:", error);
-        return NextResponse.json({ error: true, message: error.message || 'Failed to generate audio' }, { status: 500 });
+        return NextResponse.json({ error: true, message: 'Failed to generate audio' }, { status: 500 });
     }
 }

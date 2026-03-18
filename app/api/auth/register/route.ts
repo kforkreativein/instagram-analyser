@@ -15,6 +15,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
+      return NextResponse.json(
+        { error: "Password must be at least 8 characters and include a number and special character." },
+        { status: 400 }
+      );
+    }
+
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -22,8 +30,8 @@ export async function POST(request: NextRequest) {
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "User already exists" },
-        { status: 409 }
+        { error: "Registration failed. Please check your details or try logging in." },
+        { status: 400 }
       );
     }
 

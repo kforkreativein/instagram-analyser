@@ -51,6 +51,6 @@ STRICT INSTRUCTION: Return ONLY the rewritten topic. No quotes, no conversationa
 
     return NextResponse.json({ expandedTopic });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "TAM expansion failed" }, { status: 500 });
+    return NextResponse.json({ error: "TAM expansion failed" }, { status: 500 });
   }
 }

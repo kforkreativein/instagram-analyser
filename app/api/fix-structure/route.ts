@@ -29,6 +29,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ updatedScript: result.response.text().replace(/```/g, '').trim() });
   } catch (error) {
     console.error("Fix Structure Error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

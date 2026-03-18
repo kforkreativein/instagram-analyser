@@ -503,7 +503,7 @@ async function fetchFromApify(
         signal: controller.signal,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown network error";
+      const message = "Unknown network error";
       throw new Error(`Apify request failed before receiving a response: ${message}`);
     }
 
@@ -632,11 +632,11 @@ export async function POST(req: NextRequest) {
     return await handleRequest(body.username, body.dateRange, apifyApiKey, body.resultsType);
   } catch (error) {
     if (error instanceof ApifyHttpError) {
-      return NextResponse.json({ error: "Apify Error: " + error.message }, { status: error.status });
+      return NextResponse.json({ error: "External service error" }, { status: error.status });
     }
 
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown Server Error" },
+      { error: "Unknown Server Error" },
       { status: 500 },
     );
   }
@@ -652,11 +652,11 @@ export async function GET(request: NextRequest) {
     return await handleRequest(username, dateRange, apifyApiKey, search.get("resultsType"));
   } catch (error) {
     if (error instanceof ApifyHttpError) {
-      return NextResponse.json({ error: "Apify Error: " + error.message }, { status: error.status });
+      return NextResponse.json({ error: "External service error" }, { status: error.status });
     }
 
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown Server Error" },
+      { error: "Unknown Server Error" },
       { status: 500 },
     );
   }

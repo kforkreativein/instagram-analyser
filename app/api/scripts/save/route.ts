@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error("[SCRIPTS_SAVE_POST]", error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Write failed" },
+            { error: "Write failed" },
             { status: 500 },
         );
     }
@@ -80,7 +80,7 @@ export async function PUT(request: NextRequest) {
     } catch (error) {
         console.error("[SCRIPTS_SAVE_PUT]", error);
         return NextResponse.json(
-            { error: error instanceof Error ? error.message : "Save failed" },
+            { error: "Save failed" },
             { status: 500 },
         );
     }
