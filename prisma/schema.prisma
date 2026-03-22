@@ -19,6 +19,8 @@ model User {
   uploads   Upload[]
   watchlistGroups WatchlistGroup[]
   history   History[]
+  leads     Lead[]
+  dmTemplates DmTemplate[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -163,6 +165,41 @@ model History {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  userId      String
+  handle      String
+  niche       String?
+  followers   String?
+  templateId  String?  // References DmTemplate.id
+  notes       String?
+  status      String   @default("Prospect") // Prospect, DMed, Replied, Interested, Call booked, Closed, Dead
+  priority    String   @default("Medium") // Low, Medium, High
+  score       Int      @default(0)
+  value       Int      @default(25000)
+  dealValue   Int      @default(0) // Tracks the specific ₹ value of this lead
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model DmTemplate {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  category    String?
+  body        String   @db.Text
+  isBuiltIn   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([userId])
 }

@@ -6,6 +6,7 @@ import {
   Clapperboard,
   Home,
   LogOut,
+  MessageSquare,
   Settings,
   Tv,
   Upload,
@@ -29,6 +30,7 @@ const navItems = [
     section: "Create", items: [
       { label: "Scripts", path: "/scripts", icon: Clapperboard },
       { label: "Clients", path: "/clients", icon: Users },
+      { label: "Leads", path: "/leads", icon: MessageSquare },
     ]
   },
   {

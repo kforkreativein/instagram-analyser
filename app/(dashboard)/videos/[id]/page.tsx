@@ -646,16 +646,17 @@ export default function VideoAnalysisPage() {
                   </h3>
                   <div className="flex flex-col gap-6">
 
-                    {/* Group 1: Hook Matrix */}
-                    <div className="glass-surface glow-magenta rounded-2xl p-6">
-                      <div className="flex items-center justify-between mb-4 border-b border-red-500/20 pb-2">
-                        <h4 className="text-sm font-bold text-red-400 uppercase tracking-widest">Hook Analysis</h4>
-                        <span className="px-3 py-1 bg-red-500/20 text-red-300 font-bold rounded-full border border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.5)] text-[11px] uppercase tracking-wider">{analysisPayload.deepAnalysis.hooks.hookType || "Analyzing..."}</span>
+                    {/* Group 1: Hook Matrix - NEON RED/PINK */}
+                    <div className="bg-[#0D1017]/80 backdrop-blur-md border border-[#FF3B57]/30 rounded-2xl p-6 shadow-[0_0_20px_rgba(255,59,87,0.05)] relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#FF3B57] to-transparent"></div>
+                      <div className="flex items-center justify-between mb-4 border-b border-[#FF3B57]/20 pb-2">
+                        <h4 className="text-sm font-bold text-[#FF3B57] uppercase tracking-widest">Hook Analysis</h4>
+                        <span className="px-3 py-1 bg-[#FF3B57]/20 text-[#FF3B57] font-bold rounded-full border border-[#FF3B57]/50 shadow-[0_0_15px_rgba(255,59,87,0.5)] text-[11px] uppercase tracking-wider">{analysisPayload.deepAnalysis.hooks.hookType || "Analyzing..."}</span>
                       </div>
                       <div className="space-y-4">
                         {analysisPayload.deepAnalysis.hooks.formula && (
                           <div className="flex items-start gap-3 mb-4 bg-[#A78BFA]/5 border border-[#A78BFA]/20 p-3 rounded-md">
-                            <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-[#A78BFA]/20 text-[#A78BFA] tracking-wider uppercase shrink-0">
+                            <span className="bg-[#FF3B57]/10 text-[#FF3B57] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#FF3B57]/20 uppercase shrink-0">
                               FORMULA
                             </span>
                             <p className="text-[#A78BFA] text-[13px] font-['DM_Sans'] leading-relaxed italic">
@@ -664,45 +665,46 @@ export default function VideoAnalysisPage() {
                           </div>
                         )}
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded-md mr-2">Spoken</span>
+                          <span className="bg-[#FF3B57]/10 text-[#FF3B57] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#FF3B57]/20 mr-2 uppercase">Spoken</span>
                           {analysisPayload.deepAnalysis.hooks.spokenHook}
                         </div>
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded-md mr-2">Visual</span>
+                          <span className="bg-[#FF3B57]/10 text-[#FF3B57] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#FF3B57]/20 mr-2 uppercase">Visual</span>
                           {analysisPayload.deepAnalysis.hooks.visualHook}
                         </div>
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-red-400 bg-red-500/10 px-2 py-1 rounded-md mr-2">Text</span>
+                          <span className="bg-[#FF3B57]/10 text-[#FF3B57] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#FF3B57]/20 mr-2 uppercase">Text</span>
                           {analysisPayload.deepAnalysis.hooks.textHook}
                         </div>
                       </div>
                     </div>
 
-                    {/* Group 2: Core Narrative & Substance */}
-                    <div className="glass-surface glow-cyan rounded-2xl p-6">
-                      <div className="flex items-center justify-between mb-4 border-b border-blue-500/20 pb-2">
-                        <h4 className="text-sm font-bold text-blue-400 uppercase tracking-widest">Narrative Substance</h4>
+                    {/* Group 2: Core Narrative & Substance - NEON BLUE/CYAN */}
+                    <div className="bg-[#0D1017]/80 backdrop-blur-md border border-[#3B82F6]/30 rounded-2xl p-6 shadow-[0_0_20px_rgba(59,130,246,0.05)] relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#3B82F6] to-transparent"></div>
+                      <div className="flex items-center justify-between mb-4 border-b border-[#3B82F6]/20 pb-2">
+                        <h4 className="text-sm font-bold text-[#3B82F6] uppercase tracking-widest">Narrative Substance</h4>
                         <span className="px-3 py-1 bg-cyan-500/20 text-cyan-300 font-bold rounded-full border border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.5)] text-[11px] uppercase tracking-wider">{analysisPayload.deepAnalysis.narrative.storyStructure || "Analyzing..."}</span>
                       </div>
                       <div className="space-y-4">
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md mr-2">Topic</span>
+                          <span className="bg-[#3B82F6]/10 text-[#3B82F6] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#3B82F6]/20 mr-2 uppercase">Topic</span>
                           {analysisPayload.deepAnalysis.narrative.topic}
                         </div>
                         <div className="font-['DM_Sans'] text-[13.5px] leading-[1.65] text-white p-4 bg-yellow-400/5 border border-yellow-400/20 rounded-xl shadow-[0_0_15px_rgba(250,204,21,0.1)] group">
-                          <span className="text-[10px] uppercase font-bold text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md mr-3 border border-yellow-400/20">Seed</span>
+                          <span className="bg-yellow-400/10 text-yellow-400 text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-yellow-400/20 mr-3 uppercase">Seed</span>
                           <span className="text-yellow-50/90 font-medium italic">"{analysisPayload.deepAnalysis.narrative.seed}"</span>
                         </div>
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded-md mr-2">Substance</span>
+                          <span className="bg-[#3B82F6]/10 text-[#3B82F6] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#3B82F6]/20 mr-2 uppercase">Substance</span>
                           {analysisPayload.deepAnalysis.narrative.substance}
                         </div>
 
                         {/* Unique Angle */}
                         {analysisPayload.deepAnalysis.narrative.uniqueAngle && (
-                          <div className="mt-5 pt-5 border-t border-[rgba(255,255,255,0.05)]">
+                          <div className="mt-5 pt-5 border-t border-white/[0.05]">
                             <div className="flex items-start gap-3">
-                              <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 tracking-wider uppercase shrink-0">
+                              <span className="bg-[#A855F7]/10 text-[#A855F7] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#A855F7]/20 uppercase shrink-0">
                                 UNIQUE ANGLE
                               </span>
                               <p className="text-[#8892A4] text-[13px] font-['DM_Sans'] leading-relaxed">
@@ -716,7 +718,7 @@ export default function VideoAnalysisPage() {
                         {analysisPayload.deepAnalysis.narrative.commonBelief && (
                           <div className="mt-4">
                             <div className="flex items-start gap-3">
-                              <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 tracking-wider uppercase shrink-0">
+                              <span className="bg-orange-500/10 text-orange-400 text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-orange-500/20 uppercase shrink-0">
                                 COMMON BELIEF
                               </span>
                               <p className="text-[#8892A4] text-[13px] font-['DM_Sans'] leading-relaxed">
@@ -730,7 +732,7 @@ export default function VideoAnalysisPage() {
                         {analysisPayload.deepAnalysis.narrative.supportingEvidence && analysisPayload.deepAnalysis.narrative.supportingEvidence.length > 0 && (
                           <div className="mt-4">
                             <div className="flex items-start gap-3">
-                              <span className="mt-0.5 text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 tracking-wider uppercase shrink-0">
+                              <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-emerald-500/20 uppercase shrink-0">
                                 EVIDENCE
                               </span>
                               <ul className="flex flex-col gap-2 w-full">
@@ -746,34 +748,36 @@ export default function VideoAnalysisPage() {
                       </div>
                     </div>
 
-                    {/* Group 3: Visual Architecture */}
-                    <div className="glass-surface glow-blue rounded-2xl p-6">
-                      <h4 className="text-sm font-bold text-purple-400 mb-4 uppercase tracking-widest border-b border-purple-500/20 pb-2">Visual Architecture</h4>
+                    {/* Group 3: Visual Architecture - NEON PURPLE */}
+                    <div className="bg-[#0D1017]/80 backdrop-blur-md border border-[#A855F7]/30 rounded-2xl p-6 shadow-[0_0_20px_rgba(168,85,247,0.05)] relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#A855F7] to-transparent"></div>
+                      <h4 className="text-sm font-bold text-[#A855F7] mb-4 uppercase tracking-widest border-b border-[#A855F7]/20 pb-2">Visual Architecture</h4>
                       <div className="space-y-4">
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md mr-2">Layout</span>
+                          <span className="bg-[#A855F7]/10 text-[#A855F7] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#A855F7]/20 mr-2 uppercase">Layout</span>
                           {analysisPayload.deepAnalysis.architecture.visualLayout}
                         </div>
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md mr-2">Elements</span>
+                          <span className="bg-[#A855F7]/10 text-[#A855F7] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#A855F7]/20 mr-2 uppercase">Elements</span>
                           {analysisPayload.deepAnalysis.architecture.visualElements}
                         </div>
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md mr-2">Key Visuals</span>
+                          <span className="bg-[#A855F7]/10 text-[#A855F7] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#A855F7]/20 mr-2 uppercase">Key Visuals</span>
                           {analysisPayload.deepAnalysis.architecture.keyVisuals}
                         </div>
                         <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                          <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-500/10 px-2 py-1 rounded-md mr-2">Audio Vibe</span>
+                          <span className="bg-[#A855F7]/10 text-[#A855F7] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#A855F7]/20 mr-2 uppercase">Audio Vibe</span>
                           {analysisPayload.deepAnalysis.architecture.audio}
                         </div>
                       </div>
                     </div>
 
-                    {/* Group 4: Conversion */}
-                    <div className="glass-surface glow-green rounded-2xl p-6">
-                      <h4 className="text-sm font-bold text-emerald-400 mb-4 uppercase tracking-widest border-b border-emerald-500/20 pb-2">Conversion</h4>
+                    {/* Group 4: Conversion - NEON EMERALD */}
+                    <div className="bg-[#0D1017]/80 backdrop-blur-md border border-[#10B981]/30 rounded-2xl p-6 shadow-[0_0_20px_rgba(16,185,129,0.05)] relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#10B981] to-transparent"></div>
+                      <h4 className="text-sm font-bold text-[#10B981] mb-4 uppercase tracking-widest border-b border-[#10B981]/20 pb-2">Conversion</h4>
                       <div className="font-['DM_Sans'] text-[13px] leading-[1.65] text-gray-300">
-                        <span className="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-md mr-2">CTA</span>
+                        <span className="bg-[#10B981]/10 text-[#10B981] text-[10px] font-bold tracking-wider px-2 py-1 rounded border border-[#10B981]/20 mr-2 uppercase">CTA</span>
                         {analysisPayload.deepAnalysis.conversion.cta}
                       </div>
                     </div>

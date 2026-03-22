@@ -463,7 +463,7 @@ function buildUniversalSystemPrompt(transcriptText: string): string {
     "visualHook": "What grabs the eye in the first 3 seconds.",
     "textHook": "The on-screen text used to stop the scroll.",
     "hookType": "STRICT HOOK CATEGORIZATION: For the 'hookType' field, you are FORBIDDEN from using generic terms like \\"Curiosity\\", \\"Statement\\", or \\"Question\\". You MUST categorize the spoken hook using ONLY one of the following exact 10 strings: [\\"Secret Reveal\\", \\"Contrarian\\", \\"Problem Hook\\", \\"Question Hook\\", \\"Case Study\\", \\"Education Hook\\", \\"List Hook\\", \\"Comparison Hook\\", \\"Personal Experience\\", \\"The Viral Stack\\"] If it does not perfectly fit one, pick the closest match from this exact list. Do not invent new categories.",
-    "formula": "Extract the core psychological template of the spoken hook using bracketed variables. Example: '[Subject] is not [Common Belief], it is [Surprising Truth].' or 'How I used [Unconventional Method] to achieve [Desirable Result].'"
+    "formula": "CRITICAL: Extract the core psychological template of the spoken hook as a SHORT, PUNCHY fill-in-the-blank formula. Do NOT explain the hook. Return ONLY the template. Use bracketed placeholders like [Insert Noun], [Timeframe], or [Result]. PERFECT EXAMPLES: 'Here\\'s exactly how much [Item] you need to [Result].' | 'It took me [Timeframe] to learn this, but I\\'ll teach it to you in 60 seconds.' | 'Day [Number] of turning from [Before State] to [After State].' | 'Stop trying to [Action]. Start trying to [Better Action].' | '[Subject] is not [Common Belief], it is [Surprising Truth].'"
   },
 
   "narrative": {
