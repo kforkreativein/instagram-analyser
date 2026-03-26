@@ -41,6 +41,8 @@ export default function UploadsPage() {
   const [progressLabel, setProgressLabel] = useState("Uploading...");
   const [recentUploads, setRecentUploads] = useState<SavedVideoData[]>([]);
   const [dbUploads, setDbUploads] = useState<DbUpload[]>([]);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeUploadId, setActiveUploadId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -69,19 +71,55 @@ export default function UploadsPage() {
     }
   }, []);
 
+  const PROGRESS_STATES = ["Uploading to cloud...", "Queuing analysis job...", "Transcribing speech...", "Analyzing with AI...", "Generating breakdown..."];
+
   useEffect(() => {
     if (!isAnalyzing) return;
-
-    // Cycle progress label text for UX
-    const states = ["Uploading...", "Processing...", "Analyzing with AI...", "Generating breakdown..."];
     let i = 0;
     const interval = setInterval(() => {
-      i = (i + 1) % states.length;
-      setProgressLabel(states[i]);
-    }, 4500); // Wait longer on 'Analyzing with AI'
-
+      i = (i + 1) % PROGRESS_STATES.length;
+      setProgressLabel(PROGRESS_STATES[i]);
+    }, 4500);
     return () => clearInterval(interval);
   }, [isAnalyzing]);
+
+  // Poll for job completion
+  useEffect(() => {
+    if (!activeJobId || !activeUploadId) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/analyze-video/status?jobId=${activeJobId}`);
+        if (!res.ok) return;
+        const data = await res.json() as { status: string; id: string };
+
+        if (data.status === "COMPLETED") {
+          clearInterval(pollInterval);
+          setActiveJobId(null);
+          setActiveUploadId(null);
+          setIsAnalyzing(false);
+          setSelectedFile(null);
+          // Refresh upload list then navigate
+          fetch("/api/uploads")
+            .then(r => r.json())
+            .then((d: { uploads?: DbUpload[] }) => { if (Array.isArray(d.uploads)) setDbUploads(d.uploads); })
+            .catch(() => {});
+          router.push(`/videos/${data.id}`);
+        } else if (data.status === "FAILED") {
+          clearInterval(pollInterval);
+          setActiveJobId(null);
+          setActiveUploadId(null);
+          setIsAnalyzing(false);
+          setSelectedFile(null);
+          toast("error", "Analysis Failed", "The AI pipeline encountered an error. Check your API keys in Settings.");
+        }
+      } catch {
+        // Non-fatal polling error — keep trying
+      }
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [activeJobId, activeUploadId]);
 
   async function processFile(file: File, input?: HTMLInputElement) {
     if (!file || isAnalyzing) return;
@@ -102,98 +140,47 @@ export default function UploadsPage() {
     setError("");
     setSelectedFile(file);
     setIsAnalyzing(true);
-    setProgressLabel("Uploading...");
-
-    const getStoredKey = (keyName: string) => {
-      const val = localStorage.getItem(keyName);
-      return val && val !== "undefined" && val !== "null" ? val.trim() : "";
-    };
+    setProgressLabel("Uploading to cloud...");
 
     try {
-      // 1. Upload directly to Vercel Blob to bypass 413 Payload Error
+      // 1. Upload directly to Vercel Blob
       const newBlob = await upload(file.name, file, {
         access: 'public',
         handleUploadUrl: '/api/upload',
       });
 
-      // 2. Send the blob URL for analysis
-      const response = await fetch("/api/analyze-manual", {
+      setProgressLabel("Queuing analysis job...");
+
+      // 2. Register the job (creates DB record, returns jobId immediately)
+      const startRes = await fetch("/api/analyze-video/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          videoUrl: newBlob.url,
-          fileName: file.name 
-        }),
+        body: JSON.stringify({ videoUrl: newBlob.url, fileName: file.name }),
       });
 
-      if (!response.ok) {
-        const errData = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(errData.error || "Failed to analyze uploaded video.");
+      if (!startRes.ok) {
+        const errData = (await startRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error || "Failed to queue analysis job.");
       }
 
-      const analysisData = (await response.json()) as ManualAnalyzeResponse;
-      const transcript = (analysisData.transcript || "").trim();
-      const newId = analysisData.id || `manual-${Date.now()}`;
-      const localVideoUrl = URL.createObjectURL(file);
-      const nowIso = new Date().toISOString();
+      const { jobId, uploadId } = await startRes.json() as { jobId: string; uploadId: string };
 
-      const post: InstagramPost = {
-        id: newId,
-        username: "manual_upload",
-        followersCount: 0,
-        shortcode: newId,
-        permalink: "#",
-        caption: analysisData.analysis.summary.coreIdea || "Manual upload analysis",
-        mediaType: "REEL",
-        isVideo: true,
-        videoUrl: localVideoUrl,
-        postedAt: nowIso,
-        metrics: { views: 0, likes: 0, comments: 0, saves: 0, shares: 0 },
-        engagementCount: 0,
-        engagementRate: 0,
-        zScores: { views: 0, likes: 0, comments: 0, saves: 0, shares: 0 },
-        outlierScore: analysisData.analysis.outlierScore || 0,
-        isOutlier: (analysisData.analysis.outlierScore || 0) >= 2,
-      };
+      // 3. Fire the worker (long-running) — do NOT await; browser holds the connection
+      fetch("/api/analyze-video/worker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, videoUrl: newBlob.url, fileName: file.name }),
+      }).catch(() => {
+        // Worker will mark the job as FAILED in DB; polling will surface the error
+      });
 
-      const analysis: AnalyzeResponse = {
-        ...analysisData,
-        analysis: {
-          ...analysisData.analysis,
-          breakdownBlocks: {
-            ...analysisData.analysis.breakdownBlocks,
-            problemAndSolution: transcript || analysisData.analysis.breakdownBlocks.problemAndSolution,
-          },
-        },
-      };
+      setProgressLabel("Transcribing speech...");
 
-      const savedVideoData: SavedVideoData = {
-        savedAt: nowIso,
-        post,
-        analysis,
-      };
-
-      // Instant UI update — push new record to card grid
-      const newDbRecord: DbUpload = { id: newId, fileName: file.name, analysis, transcript, createdAt: nowIso };
-      setDbUploads(prev => [newDbRecord, ...prev]);
-
-      // Save History to localStorage
-      const rawHistory = localStorage.getItem(ANALYZED_HISTORY_KEY);
-      const existing = (Array.isArray(rawHistory ? JSON.parse(rawHistory!) : [])) ? JSON.parse(rawHistory!) : [];
-      localStorage.setItem(ANALYZED_HISTORY_KEY, JSON.stringify([savedVideoData, ...existing]));
-
-      // Save Cache so refresh works
-      const analysesRaw = localStorage.getItem(ANALYSIS_CACHE_KEY);
-      const cachedAnalyses = analysesRaw ? JSON.parse(analysesRaw) : {};
-      localStorage.setItem(ANALYSIS_CACHE_KEY, JSON.stringify({ ...cachedAnalyses, [newId]: analysis }));
-
-      const postsRaw = localStorage.getItem("instagram-posts-cache");
-      const cachedPosts = postsRaw ? JSON.parse(postsRaw) : {};
-      localStorage.setItem("instagram-posts-cache", JSON.stringify({ ...cachedPosts, [newId]: post }));
-
-      router.push(`/videos/${newId}`);
+      // 4. Start polling — the useEffect above will take over
+      setActiveJobId(jobId);
+      setActiveUploadId(uploadId);
     } catch (uploadError) {
-      toast("error", "Analysis Failed", uploadError instanceof Error ? uploadError.message : "Failed to analyze video.");
+      toast("error", "Upload Failed", uploadError instanceof Error ? uploadError.message : "Failed to start analysis.");
       setIsAnalyzing(false);
       setSelectedFile(null);
     } finally {

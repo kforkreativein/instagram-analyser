@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getSettings } from "../../../lib/db";
 
 export const maxDuration = 60;
 export const runtime = "nodejs";
@@ -154,7 +153,6 @@ export async function POST(request: NextRequest) {
     try {
         const body = (await request.json().catch(() => ({}))) as {
             username?: string;
-            apifyApiKey?: string;
         };
 
         const username = (body.username || "").trim().replace(/^@+/, "");
@@ -165,21 +163,28 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Invalid Instagram username" }, { status: 400 });
         }
 
-        // Fetch user's Apify API key from database
-        let apifyApiKey = (body.apifyApiKey || "").trim(); // fallback to body if provided
+        // 1. Authenticate the user
         const session = await getServerSession(authOptions);
-        if (!apifyApiKey && session?.user?.id) {
-          try {
-            const dbSettings = await getSettings(session.user.id);
-            apifyApiKey = dbSettings.apifyApiKey;
-          } catch (error) {
-            console.error("Failed to fetch user settings:", error);
-          }
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
-        
-        if (!apifyApiKey) {
-            return NextResponse.json({ error: "API Key not found in Settings. Please go to Settings to add it." }, { status: 401 });
+
+        // 2. Fetch the user's secure API key from the database
+        const userSettings = await prisma.settings.findUnique({
+            where: { userId: session.user.id },
+            select: { apifyApiKey: true },
+        });
+
+        // 3. Validate the key exists and isn't the frontend mask
+        if (!userSettings?.apifyApiKey || userSettings.apifyApiKey === "••••••••") {
+            return NextResponse.json(
+                { error: "Apify API key is missing or invalid. Please update it in Settings." },
+                { status: 400 },
+            );
         }
+
+        // 4. Use only the secure DB key
+        const apifyApiKey = userSettings.apifyApiKey;
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), APIFY_TIMEOUT_MS);
@@ -233,7 +238,12 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        // Hard cap: only consider videos from the last 12 months
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
         const recentVideos = [...deduped]
+            .filter((v) => new Date(v.postedAt) >= twelveMonthsAgo)
             .sort((a, b) => Date.parse(b.postedAt) - Date.parse(a.postedAt))
             .slice(0, 30);
 
@@ -254,6 +264,7 @@ export async function POST(request: NextRequest) {
         });
 
         const outliers = processedVideos
+            .filter((v) => v.outlierScore >= 2.0)
             .sort((a, b) => b.outlierScore - a.outlierScore || b.views - a.views);
 
         return NextResponse.json<ScanProfileResponse>({

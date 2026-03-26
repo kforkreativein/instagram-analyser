@@ -10,11 +10,11 @@ import ffmpegPath from "ffmpeg-static";
 import os from "os";
 import fs from "fs";
 import path from "path";
-import type { AIAnalysis, AnalyzeResponse, DeepAnalysis } from "../../../lib/types";
+import type { AIAnalysis, DeepAnalysis } from "../../../../lib/types";
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
-export const maxDuration = 300; // Transcription + AI analysis can take 2-4 min
+export const maxDuration = 300;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,6 @@ const TRANSCRIPTION_PROMPT =
 const TRANSCRIPTION_MODEL = "gemini-3-flash-preview";
 const MAX_TRANSCRIPT_CHARS = 12000;
 
-/** Extract first frame of a video buffer as a base64 JPEG thumbnail */
 async function extractThumbnail(videoBuffer: Buffer, mimeType: string): Promise<string | null> {
   return new Promise((resolve) => {
     try {
@@ -31,7 +30,6 @@ async function extractThumbnail(videoBuffer: Buffer, mimeType: string): Promise<
       const tmpIn = path.join(os.tmpdir(), `thumb-in-${Date.now()}${ext}`);
       const tmpOut = path.join(os.tmpdir(), `thumb-out-${Date.now()}.jpg`);
       fs.writeFileSync(tmpIn, videoBuffer);
-
       ffmpeg(tmpIn)
         .screenshots({ timestamps: ["00:00:00.001"], filename: path.basename(tmpOut), folder: path.dirname(tmpOut), size: "480x?" })
         .on("end", () => {
@@ -48,7 +46,6 @@ async function extractThumbnail(videoBuffer: Buffer, mimeType: string): Promise<
   });
 }
 
-/** Strip SRT timestamps/numbers to get plain spoken text for LLM analysis */
 function srtToPlainText(srt: string): string {
   return srt
     .split(/\r?\n/)
@@ -91,7 +88,6 @@ function parseTextResponse(text: string): string {
 
 function parseJsonResponse(text: string): UnknownRecord {
   const cleaned = stripMarkdownFences(text);
-
   try {
     return JSON.parse(cleaned) as UnknownRecord;
   } catch {
@@ -100,14 +96,12 @@ function parseJsonResponse(text: string): UnknownRecord {
     if (firstBrace >= 0 && lastBrace > firstBrace) {
       return JSON.parse(cleaned.slice(firstBrace, lastBrace + 1)) as UnknownRecord;
     }
-
     throw new Error("Failed to parse model JSON response");
   }
 }
 
 function fallbackAnalysis(transcript: string): AIAnalysis {
   const firstLine = transcript.split(/\r?\n/).map((line) => line.trim()).find(Boolean) ?? "Strong opening promise.";
-
   return {
     hookAnalysis: {
       type: /\?/.test(firstLine) ? "Question Hook" : "Curiosity Hook",
@@ -133,29 +127,18 @@ function fallbackAnalysis(transcript: string): AIAnalysis {
       targetAudienceAndTone: "Busy viewers who want practical, clear advice quickly.",
       problemAndSolution: transcript || "No transcript provided.",
       audioAndAtmosphere: "Not available from transcript-only analysis.",
-      keyTakeaways: [
-        "Open with one focused promise.",
-        "Deliver value in concise steps.",
-        "Finish with one specific CTA.",
-      ],
+      keyTakeaways: ["Open with one focused promise.", "Deliver value in concise steps.", "Finish with one specific CTA."],
     },
     summary: {
       coreIdea: "Transcript-based analysis for a manually uploaded short-form video.",
       outlierPotential: "Moderate if the hook and CTA are clear and specific.",
-      actionableImprovements: [
-        "Shorten the opening to one sharp line.",
-        "Add one concrete proof point.",
-        "Use a single direct CTA at the end.",
-      ],
+      actionableImprovements: ["Shorten the opening to one sharp line.", "Add one concrete proof point.", "Use a single direct CTA at the end."],
     },
   };
 }
 
 function sanitizeAnalysis(payload: unknown, transcript: string): AIAnalysis {
-  if (!payload || typeof payload !== "object") {
-    return fallbackAnalysis(transcript);
-  }
-
+  if (!payload || typeof payload !== "object") return fallbackAnalysis(transcript);
   const base = fallbackAnalysis(transcript);
   const obj = payload as UnknownRecord;
   const hook = (obj.hookAnalysis ?? {}) as UnknownRecord;
@@ -163,7 +146,6 @@ function sanitizeAnalysis(payload: unknown, transcript: string): AIAnalysis {
   const style = (obj.styleAnalysis ?? {}) as UnknownRecord;
   const breakdown = (obj.breakdownBlocks ?? {}) as UnknownRecord;
   const summary = (obj.summary ?? {}) as UnknownRecord;
-
   return {
     hookAnalysis: {
       type: toStringSafe(hook.type, base.hookAnalysis.type),
@@ -186,76 +168,58 @@ function sanitizeAnalysis(payload: unknown, transcript: string): AIAnalysis {
     breakdownBlocks: {
       hook: toStringSafe(breakdown.hook, base.breakdownBlocks.hook),
       cta: toStringSafe(breakdown.cta, base.breakdownBlocks.cta),
-      targetAudienceAndTone: toStringSafe(
-        breakdown.targetAudienceAndTone,
-        base.breakdownBlocks.targetAudienceAndTone,
-      ),
+      targetAudienceAndTone: toStringSafe(breakdown.targetAudienceAndTone, base.breakdownBlocks.targetAudienceAndTone),
       problemAndSolution: transcript || toStringSafe(breakdown.problemAndSolution, base.breakdownBlocks.problemAndSolution),
       audioAndAtmosphere: toStringSafe(breakdown.audioAndAtmosphere, base.breakdownBlocks.audioAndAtmosphere),
-      keyTakeaways: toStringArray(breakdown.keyTakeaways).length > 0
-        ? toStringArray(breakdown.keyTakeaways)
-        : base.breakdownBlocks.keyTakeaways,
+      keyTakeaways: toStringArray(breakdown.keyTakeaways).length > 0 ? toStringArray(breakdown.keyTakeaways) : base.breakdownBlocks.keyTakeaways,
     },
     summary: {
       coreIdea: toStringSafe(summary.coreIdea, base.summary.coreIdea),
       outlierPotential: toStringSafe(summary.outlierPotential, base.summary.outlierPotential),
-      actionableImprovements: toStringArray(summary.actionableImprovements).length > 0
-        ? toStringArray(summary.actionableImprovements)
-        : base.summary.actionableImprovements,
+      actionableImprovements: toStringArray(summary.actionableImprovements).length > 0 ? toStringArray(summary.actionableImprovements) : base.summary.actionableImprovements,
     },
   };
 }
 
 function normalizeProvider(value: string): Provider {
-  const normalized = value.trim().toLowerCase();
-  if (normalized.includes("openai") || normalized.includes("gpt")) return "OpenAI";
-  if (normalized.includes("anthropic") || normalized.includes("claude")) return "Anthropic";
+  const n = value.trim().toLowerCase();
+  if (n.includes("openai") || n.includes("gpt")) return "OpenAI";
+  if (n.includes("anthropic") || n.includes("claude")) return "Anthropic";
   return "Gemini";
 }
 
-function mapGeminiModel(modelSelection: string): string {
-  const normalized = modelSelection.toLowerCase().trim();
-  if (!normalized) return "gemini-3-flash-preview";
-  if (normalized.startsWith("gemini-")) return normalized;
-  if (normalized.includes("2.5") && normalized.includes("pro")) return "gemini-2.5-pro";
-  if (normalized.includes("1.5") && normalized.includes("pro")) return "gemini-3-flash-preview";
-  if (normalized.includes("pro")) return "gemini-2.5-pro";
+function mapGeminiModel(m: string): string {
+  const n = m.toLowerCase().trim();
+  if (!n) return "gemini-3-flash-preview";
+  if (n.startsWith("gemini-")) return n;
+  if (n.includes("2.5") && n.includes("pro")) return "gemini-2.5-pro";
+  if (n.includes("pro")) return "gemini-2.5-pro";
   return "gemini-3-flash-preview";
 }
 
-function mapOpenAIModel(modelSelection: string): string {
-  const normalized = modelSelection.toLowerCase().trim();
-  if (!normalized) return "gpt-5-mini-2025-08-07";
-  if (normalized.startsWith("gpt-")) return normalized;
-  if (normalized.includes("4.1")) return "gpt-4.1";
-  if (normalized.includes("4o-mini")) return "gpt-4o-mini";
+function mapOpenAIModel(m: string): string {
+  const n = m.toLowerCase().trim();
+  if (!n) return "gpt-5-mini-2025-08-07";
+  if (n.startsWith("gpt-")) return n;
+  if (n.includes("4.1")) return "gpt-4.1";
   return "gpt-5-mini-2025-08-07";
 }
 
-function mapAnthropicModel(modelSelection: string): string {
-  const normalized = modelSelection.toLowerCase().trim();
-  if (!normalized) return "claude-4.5-haiku";
-  if (normalized.startsWith("claude-")) return normalized;
-  if (normalized.includes("3.7") && normalized.includes("sonnet")) return "claude-3-7-sonnet-latest";
-  if (normalized.includes("haiku")) return "claude-3-5-haiku-latest";
+function mapAnthropicModel(m: string): string {
+  const n = m.toLowerCase().trim();
+  if (!n) return "claude-4.5-haiku";
+  if (n.startsWith("claude-")) return n;
+  if (n.includes("3.7") && n.includes("sonnet")) return "claude-3-7-sonnet-latest";
   return "claude-4.5-haiku";
 }
 
 function extractAnthropicText(response: unknown): string {
-  if (!response || typeof response !== "object" || !("content" in response)) {
-    return "";
-  }
-
+  if (!response || typeof response !== "object" || !("content" in response)) return "";
   const content = (response as { content?: unknown }).content;
-  if (!Array.isArray(content)) {
-    return "";
-  }
-
+  if (!Array.isArray(content)) return "";
   return content
-    .filter((block): block is { type: string; text?: string } => {
-      return Boolean(block && typeof block === "object" && "type" in block && (block as { type?: unknown }).type === "text");
-    })
-    .map((block) => block.text ?? "")
+    .filter((b): b is { type: string; text?: string } => Boolean(b && typeof b === "object" && "type" in b && (b as { type?: unknown }).type === "text"))
+    .map((b) => b.text ?? "")
     .join("\n")
     .trim();
 }
@@ -270,44 +234,36 @@ The JSON must exactly match this structure:
     "seed": "A 1-sentence summary of the core video concept.",
     "substance": "A brief summary of what is actually discussed.",
     "storyStructure": "MUST BE EXACTLY ONE OF: Problem/Solution, Contrarian, Listicle, Story/Vlog, Step-by-Step",
-    "uniqueAngle": "What is the specific, unique perspective or framing the creator uses to introduce this topic? (e.g., 'Open with a dramatic confrontation to introduce a lesson...')",
-    "commonBelief": "What widespread myth, assumption, or common belief is this video explicitly or implicitly challenging?",
-    "supportingEvidence": [
-      "Provide 2-3 bullet points of specific evidence, visual proof, or logical arguments the creator uses in the video to back up their unique angle."
-    ]
+    "uniqueAngle": "What is the specific, unique perspective or framing the creator uses?",
+    "commonBelief": "What widespread myth or assumption is this video challenging?",
+    "supportingEvidence": ["2-3 bullet points of specific evidence the creator uses."]
   },
   "hooks": {
     "spokenHook": "The exact first words spoken in the video.",
     "visualHook": "What grabs the eye in the first 3 seconds.",
     "textHook": "The on-screen text used to stop the scroll.",
     "hookType": "MUST BE EXACTLY ONE OF: Negative Hook, Curiosity Hook, Value Hook, Story Hook, Visual Hook, Question Hook, Direct Hook, Empathy Hook, Statistic Hook",
-    "formula": "Extract the core psychological template of the spoken hook using bracketed variables. Example: '[Subject] is not [Common Belief], it is [Surprising Truth].' or 'How I used [Unconventional Method] to achieve [Desirable Result].'"
+    "formula": "Extract the core psychological template of the spoken hook using bracketed variables."
   },
   "architecture": {
-    "visualLayout": "How the screen is arranged (e.g., split-screen, green screen, dynamic zoom, talking head).",
-    "visualElements": "Specific video and audio elements used (e.g., sound effects, pop-up text, B-roll, captions).",
-    "keyVisuals": "The 2-3 most memorable visual moments or shots in the video.",
-    "audioVibe": "The overall audio atmosphere (e.g., upbeat, tense, calm, dramatic)."
+    "visualLayout": "How the screen is arranged.",
+    "visualElements": "Specific video and audio elements used.",
+    "keyVisuals": "The 2-3 most memorable visual moments.",
+    "audioVibe": "The overall audio atmosphere."
   },
   "conversion": {
     "cta": "The exact Call to Action at the end of the video."
   }
 }
 
-STRICT INSTRUCTION FOR HOOKS:
-You will be provided with a text transcript of a short-form video. Audio transcripts inherently lack visual descriptions.
-UNDER NO CIRCUMSTANCES are you allowed to output "Not specified in transcript", "N/A", "Not available", or any similar placeholder for any field.
-Instead, you MUST use your expertise as a viral video strategist to INFER and RECONSTRUCT the most highly probable values based on the topic, tone, and spoken content. Every field must be populated.
+STRICT INSTRUCTION: Never output "Not specified in transcript", "N/A", or any placeholder. Infer and reconstruct all fields from context.
 
 Transcript:\n${transcriptText}`;
 }
 
 function normalizeUniversalAnalysisShape(payload: UnknownRecord, transcriptText: string): UnknownRecord {
-  if (payload.hookAnalysis || payload.structureAnalysis || payload.styleAnalysis) {
-    return payload;
-  }
+  if (payload.hookAnalysis || payload.structureAnalysis || payload.styleAnalysis) return payload;
 
-  // Handle new master schema: narrative / hooks / architecture / conversion
   if (payload.narrative || payload.hooks || payload.architecture || payload.conversion) {
     const narrative = (payload.narrative ?? {}) as UnknownRecord;
     const hooks = (payload.hooks ?? {}) as UnknownRecord;
@@ -346,48 +302,7 @@ function normalizeUniversalAnalysisShape(payload: UnknownRecord, transcriptText:
     };
   }
 
-  // Legacy fallback: hook / style / structure shape
-  const hookObj = (payload.hook ?? {}) as UnknownRecord;
-  const styleObj = (payload.style ?? {}) as UnknownRecord;
-  const structureObj = (payload.structure ?? {}) as UnknownRecord;
-
-  const hookType = toStringSafe(hookObj.text_hook_type, toStringSafe(hookObj.type, "Hook"));
-  const hookDescription = toStringSafe(
-    hookObj.text_hook_description,
-    toStringSafe(hookObj.description, toStringSafe(payload.description, transcriptText)),
-  );
-  const visualHook = toStringSafe(hookObj.visual_hook, "");
-  const frameworks = Array.isArray(hookObj.frameworks) ? hookObj.frameworks.map(String) : [];
-  const styleType = toStringSafe(styleObj.type, "Conversational");
-  const styleDescription = toStringSafe(styleObj.description, "Direct and clear delivery.");
-  const structureType = toStringSafe(structureObj.type, "Hook -> Value -> CTA");
-  const structureDescription = toStringSafe(
-    structureObj.description,
-    "Starts with a hook, delivers value quickly, and ends with a clear CTA.",
-  );
-
-  return {
-    hookAnalysis: {
-      type: hookType,
-      description: hookDescription,
-      visual_hook: visualHook,
-      frameworks,
-      justification: hookDescription || "Generated from transcript.",
-      formula: toStringSafe(hookObj.formula, ""),
-    },
-    structureAnalysis: {
-      type: structureType,
-      description: structureDescription,
-      bestFor: "Short-form videos",
-      justification: structureDescription || "Generated from transcript.",
-    },
-    styleAnalysis: {
-      tone: styleType || "Direct",
-      voice: styleDescription || "Conversational",
-      wordChoice: "Simple and concrete",
-      pacing: "Fast",
-    },
-  };
+  return payload;
 }
 
 function extractDeepAnalysis(payload: UnknownRecord): DeepAnalysis | null {
@@ -427,27 +342,14 @@ function extractDeepAnalysis(payload: UnknownRecord): DeepAnalysis | null {
   };
 }
 
-async function transcribeWithGemini(
-  transcriptionApiKey: string,
-  base64Video: string,
-  mimeType: string,
-): Promise<string> {
-  const transcriptionClient = new GoogleGenerativeAI(transcriptionApiKey);
-  const transcriptionModel = transcriptionClient.getGenerativeModel({
-    model: TRANSCRIPTION_MODEL,
-  });
-
-  const transcriptionResult = await transcriptionModel.generateContent([
+async function transcribeWithGemini(apiKey: string, base64Video: string, mimeType: string): Promise<string> {
+  const client = new GoogleGenerativeAI(apiKey);
+  const model = client.getGenerativeModel({ model: TRANSCRIPTION_MODEL });
+  const result = await model.generateContent([
     { text: TRANSCRIPTION_PROMPT },
-    {
-      inlineData: {
-        data: base64Video,
-        mimeType: mimeType || "video/mp4",
-      },
-    },
+    { inlineData: { data: base64Video, mimeType: mimeType || "video/mp4" } },
   ]);
-
-  return parseTextResponse(transcriptionResult.response.text() || "");
+  return result.response.text().trim();
 }
 
 async function generateWithProvider(
@@ -464,11 +366,7 @@ async function generateWithProvider(
       response_format: { type: "json_object" },
       messages: [{ role: "user", content: prompt }],
     });
-    return {
-      text: response.choices[0]?.message?.content?.trim() ?? "",
-      model: selectedModel,
-      source: "openai",
-    };
+    return { text: response.choices[0]?.message?.content?.trim() ?? "", model: selectedModel, source: "openai" };
   }
 
   if (provider === "Anthropic") {
@@ -479,69 +377,53 @@ async function generateWithProvider(
       max_tokens: 2000,
       messages: [{ role: "user", content: `${prompt}\n\nEnsure your response is valid JSON.` }],
     });
-    return {
-      text: extractAnthropicText(response),
-      model: selectedModel,
-      source: "anthropic",
-    };
+    return { text: extractAnthropicText(response), model: selectedModel, source: "anthropic" };
   }
 
   const selectedModel = mapGeminiModel(modelSelection);
   const genAI = new GoogleGenerativeAI(apiKey);
-  const geminiModel = genAI.getGenerativeModel({
-    model: selectedModel,
-    generationConfig: {
-      responseMimeType: "application/json",
-    },
-  });
+  const geminiModel = genAI.getGenerativeModel({ model: selectedModel, generationConfig: { responseMimeType: "application/json" } });
   const response = await geminiModel.generateContent(prompt);
-  return {
-    text: response.response.text().trim(),
-    model: selectedModel,
-    source: "gemini",
-  };
+  return { text: response.response.text().trim(), model: selectedModel, source: "gemini" };
 }
 
 export async function POST(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const dbUser = await prisma.user.findUnique({ where: { email: session.user.email } });
+  if (!dbUser) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  const { jobId, videoUrl, fileName } = await req.json() as {
+    jobId?: string;
+    videoUrl?: string;
+    fileName?: string;
+  };
+
+  if (!jobId || !videoUrl) {
+    return NextResponse.json({ error: "jobId and videoUrl are required" }, { status: 400 });
+  }
+
+  // Verify the job belongs to this user
+  const uploadRecord = await prisma.upload.findUnique({ where: { jobId } });
+  if (!uploadRecord || uploadRecord.userId !== dbUser.id) {
+    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  }
+
+  const markFailed = async (reason: string) => {
+    await prisma.upload.update({
+      where: { jobId },
+      data: { status: "FAILED" },
+    }).catch(() => {});
+    return NextResponse.json({ error: reason }, { status: 500 });
+  };
+
   try {
-    const contentType = req.headers.get("content-type") || "";
-    let buffer: Buffer;
-    let mimeType: string;
-    let fileName: string;
-
-    if (contentType.includes("application/json")) {
-      const body = await req.json();
-      const videoUrl = body.videoUrl;
-      fileName = body.fileName || videoUrl?.split("/").pop() || "uploaded_video.mp4";
-      
-      if (!videoUrl) return NextResponse.json({ error: "No videoUrl provided" }, { status: 400 });
-
-      const resp = await fetch(videoUrl);
-      if (!resp.ok) throw new Error("Failed to fetch video from storage.");
-      const arrayBuffer = await resp.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
-      mimeType = resp.headers.get("content-type") || "video/mp4";
-    } else {
-      const formData = await req.formData();
-      const file = formData.get("file") as File;
-      if (!file) {
-        return NextResponse.json({ error: "No file provided" }, { status: 400 });
-      }
-      const arrayBuffer = await file.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
-      mimeType = file.type;
-      fileName = file.name;
-    }
-
-    // Fetch user's API keys from database
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    const dbUser = await prisma.user.findUnique({ where: { email: session.user.email } });
-    if (!dbUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    // Fetch user settings
     const userSettings = await prisma.settings.findUnique({ where: { userId: dbUser.id } });
 
     const activeProvider = userSettings?.activeProvider ?? "Gemini";
@@ -557,90 +439,60 @@ export async function POST(req: NextRequest) {
 
     const transcriptionApiKey = userSettings?.geminiApiKey ?? "";
 
-    if (!analysisApiKey) {
-      return NextResponse.json(
-        { error: `Missing API key for ${activeProvider}. Please add it in your Settings.` },
-        { status: 400 },
-      );
-    }
-    if (!transcriptionApiKey) {
-      return NextResponse.json({ error: "Gemini API key is required for transcription. Please add it in your Settings." }, { status: 400 });
-    }
+    if (!analysisApiKey) return markFailed(`Missing API key for ${activeProvider}. Please add it in Settings.`);
+    if (!transcriptionApiKey) return markFailed("Gemini API key is required for transcription.");
 
+    // Fetch video from Vercel Blob
+    const resp = await fetch(videoUrl);
+    if (!resp.ok) return markFailed("Failed to fetch video from storage.");
+    const arrayBuffer = await resp.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const mimeType = resp.headers.get("content-type") || "video/mp4";
+    const resolvedFileName = fileName || uploadRecord.fileName;
+
+    // Transcription
     const base64Video = buffer.toString("base64");
+    const rawTranscript = await transcribeWithGemini(transcriptionApiKey, base64Video, mimeType);
+    if (!rawTranscript) return markFailed("Transcription returned empty text.");
 
-    const generatedTranscriptString = await transcribeWithGemini(transcriptionApiKey, base64Video, mimeType);
-    if (!generatedTranscriptString) {
-      throw new Error("Transcription completed but returned empty text.");
-    }
-
-    const srtTranscript = generatedTranscriptString; // keep raw SRT
-    const plainTranscript = srtToPlainText(generatedTranscriptString) || generatedTranscriptString;
+    const plainTranscript = srtToPlainText(rawTranscript) || rawTranscript;
     const transcriptForModel = plainTranscript.slice(0, MAX_TRANSCRIPT_CHARS);
 
-    const result = await generateWithProvider(
-      provider,
-      model,
-      analysisApiKey,
-      buildUniversalSystemPrompt(transcriptForModel),
-    );
-    if (!result.text) {
-      throw new Error("Analysis completed but returned empty text.");
-    }
+    // AI Analysis
+    const result = await generateWithProvider(provider, model, analysisApiKey, buildUniversalSystemPrompt(transcriptForModel));
+    if (!result.text) return markFailed("Analysis returned empty text.");
 
     let parsed: UnknownRecord = {};
     try {
       parsed = parseJsonResponse(result.text);
-    } catch (parseError) {
-      console.warn("Failed to parse analysis JSON, falling back to defaults:", parseError);
+    } catch {
+      // Fall through to fallback
     }
 
     const deepAnalysis = extractDeepAnalysis(parsed);
     const normalized = normalizeUniversalAnalysisShape(parsed, transcriptForModel);
     const analysis = sanitizeAnalysis(normalized, transcriptForModel);
     analysis.breakdownBlocks.problemAndSolution = transcriptForModel;
-    if (deepAnalysis) {
-      analysis.deepAnalysis = deepAnalysis;
-    }
+    if (deepAnalysis) analysis.deepAnalysis = deepAnalysis;
 
-    let uploadId = `manual-${Date.now()}`;
-
-    // Extract first-frame thumbnail (best-effort — non-fatal if ffmpeg fails)
+    // Thumbnail
     const thumbnail = await extractThumbnail(buffer, mimeType).catch(() => null);
 
-    // Save to Prisma Upload table (user-isolated)
-    try {
-      const prismaRecord = await prisma.upload.create({
-        data: {
-          userId: dbUser.id,
-          fileName: fileName,
-          analysis: analysis as any,
-          transcript: transcriptForModel,
-          ...(thumbnail ? { thumbnail } : {}),
-        },
-      });
-      uploadId = prismaRecord.id;
-    } catch (dbErr) {
-      console.error("Failed to save upload to DB:", dbErr);
-      // Non-fatal — client localStorage still stores the data
-    }
-
-    return NextResponse.json(
-      {
-        id: uploadId,
-        analysis,
+    // Update Upload record to COMPLETED
+    await prisma.upload.update({
+      where: { jobId },
+      data: {
+        status: "COMPLETED",
+        fileName: resolvedFileName,
+        analysis: analysis as any,
         transcript: transcriptForModel,
-        srt: srtTranscript || undefined,
-        source: result.source,
-        model: result.model,
-        generatedAt: new Date().toISOString(),
-      } as AnalyzeResponse & { id: string; transcript: string; srt?: string },
-      { status: 200 },
-    );
-  } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to analyze manual upload" },
-      { status: 500 },
-    );
+        ...(thumbnail ? { thumbnail } : {}),
+      },
+    });
+
+    return NextResponse.json({ ok: true, id: uploadRecord.id });
+  } catch (err) {
+    console.error("[analyze-video/worker] error:", err);
+    return markFailed("Worker encountered an unexpected error.");
   }
 }

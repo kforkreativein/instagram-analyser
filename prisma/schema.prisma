@@ -7,6 +7,13 @@ datasource db {
   provider = "postgresql"
 }
 
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -108,15 +115,17 @@ model Upload {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   fileName    String
+  jobId       String?  @unique
+  status      JobStatus @default(COMPLETED)
   analysis    Json?
   transcript  String? @db.Text
   thumbnail   String? @db.Text
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   @@index([userId])
 }
 

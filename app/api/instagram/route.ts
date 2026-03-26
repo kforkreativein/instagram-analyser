@@ -20,11 +20,14 @@ import {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+export const maxDuration = 120; // Extended to support deep 500-post scrapes
 
 const OUTLIER_THRESHOLD = 1.5;
 const APIFY_ACTOR = "apify~instagram-profile-scraper";
 const APIFY_ENDPOINT = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items`;
-const APIFY_TIMEOUT_MS = 45_000;
+const APIFY_TIMEOUT_MS = 110_000; // 110s — gives Apify room to scroll 3-6 months of posts
 
 const DATE_RANGE_MAP: Record<string, DateRangeOption> = {
   "1m": "1M",
@@ -237,8 +240,11 @@ function normalizePost(candidate: UnknownRecord, username: string, index: number
   const shortcode = toStringSafe(firstDefined(candidate, SHORTCODE_PATHS));
   const id = toStringSafe(idRaw) || shortcode || `${username}-${index}`;
 
+  const isPinned = Boolean(firstDefined(candidate, ["isPinned", "is_pinned", "pinned"]));
   const postedAt = parseTimestamp(firstDefined(candidate, TIMESTAMP_PATHS));
-  if (!postedAt) return null;
+  // Pinned posts sometimes return null timestamps — keep them using current date as fallback
+  if (!postedAt && !isPinned) return null;
+  const postedAtDate = postedAt ?? new Date();
 
   const permalink =
     toStringSafe(firstDefined(candidate, PERMALINK_PATHS)) ||
@@ -277,13 +283,14 @@ function normalizePost(candidate: UnknownRecord, username: string, index: number
     isVideo: mediaType === "REEL" || Boolean(videoUrl),
     displayUrl,
     videoUrl,
-    postedAt: postedAt.toISOString(),
+    postedAt: postedAtDate.toISOString(),
     metrics,
     engagementCount,
     engagementRate: round(engagementRate),
     zScores,
     outlierScore: 0,
     isOutlier: false,
+    isPinned: isPinned || undefined,
   };
 }
 
@@ -494,11 +501,11 @@ async function fetchFromApify(
         },
         body: JSON.stringify({
           usernames: [username],
-          resultsLimit: 30,
-          maxItems: 30,
-          reels_count: 30,
+          resultsLimit: 500, // Deep scroll — covers 6-12 months for daily posters
+          maxItems: 500,
+          reels_count: 500,
           resultsType,
-          onlyPostsNewerThan: startIso,
+          onlyPostsNewerThan: startIso, // Apify stops early once it hits old data (efficient)
         }),
         signal: controller.signal,
       });
@@ -547,8 +554,12 @@ function assembleResponse(
 
   const filtered = sourcePayload.posts
     .filter((post) => {
+      // Pinned posts are always relevant — bypass the date gate
+      if (post.isPinned) return true;
       const ts = Date.parse(post.postedAt);
-      return Number.isFinite(ts) && ts >= cutoff && ts <= now;
+      // Keep posts with missing or unparseable dates — never silently drop potential viral hits
+      if (!Number.isFinite(ts)) return true;
+      return ts >= cutoff && ts <= now;
     })
     .sort((a, b) => Date.parse(b.postedAt) - Date.parse(a.postedAt));
 

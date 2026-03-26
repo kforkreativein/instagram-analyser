@@ -43,13 +43,19 @@ function instagramBadge() {
 
 
 
+const OUTLIER_GATE = 2.0;
+
 function mergeOutlierFeed(existingFeed: FeedOutlier[], incomingOutliers: FeedOutlier[]): FeedOutlier[] {
   const merged = new Map<string, FeedOutlier>();
 
   for (const outlier of [...existingFeed, ...incomingOutliers]) {
+    // Safety-net: drop anything below the gate even if the API slips one through
+    const score = outlier.outlierScore ?? outlier.multiplier ?? 0;
+    if (score < OUTLIER_GATE) continue;
     merged.set(`${outlier.fromUsername}:${outlier.id}`, outlier);
   }
 
+  // Highest outlier score first, ties broken by raw views
   return [...merged.values()].sort(
     (a, b) => (b.outlierScore ?? b.multiplier) - (a.outlierScore ?? a.multiplier) || b.views - a.views,
   );
@@ -261,20 +267,11 @@ export default function ChannelsDashboardPage() {
   const [scanProgress, setScanProgress] = useState("");
   const [scanError, setScanError] = useState("");
   const [newOutliers, setNewOutliers] = useState<FeedOutlier[]>([]);
+  const [timeFilter, setTimeFilter] = useState<1 | 3 | 6 | 12>(12);
 
   async function handleScanProfiles(usernames: string[]) {
     if ((usernames?.length || 0) === 0) {
       setScanError("No profiles to scan in this watchlist.");
-      return;
-    }
-
-    const apifyKey = (() => {
-      const v = localStorage.getItem("APIFY_API_KEY");
-      return v && v !== "undefined" && v !== "null" ? v.trim() : "";
-    })();
-
-    if (!apifyKey) {
-      setScanError("Apify API key missing. Add it in Settings.");
       return;
     }
 
@@ -289,14 +286,29 @@ export default function ChannelsDashboardPage() {
           const res = await fetch("/api/scan-profile", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, apifyApiKey: apifyKey }),
+            body: JSON.stringify({ username }),
           });
           if (res.ok) {
             const payload = (await res.json()) as ScanProfileResponse;
             const channelOutliers = (Array.isArray(payload.outliers) ? payload.outliers : []).map((outlier) => ({ ...outlier, fromUsername: username }));
+            const trueOutliers = channelOutliers.filter((o) => (o.outlierScore ?? o.multiplier ?? 0) >= OUTLIER_GATE);
 
-            if ((channelOutliers?.length || 0) > 0) {
-              setNewOutliers((prevFeed) => mergeOutlierFeed(prevFeed, channelOutliers));
+            if (trueOutliers.length > 0) {
+              setNewOutliers((prevFeed) => mergeOutlierFeed(prevFeed, trueOutliers));
+            }
+
+            toast(
+              trueOutliers.length > 0 ? "success" : "info",
+              `@${username} scanned`,
+              trueOutliers.length > 0
+                ? `Extracted ${trueOutliers.length} true outlier${trueOutliers.length === 1 ? "" : "s"} (${OUTLIER_GATE}x+ score)`
+                : "No videos above the 2.0x outlier threshold",
+            );
+          } else {
+            const errData = await res.json().catch(() => ({})) as { error?: string };
+            if (errData.error) {
+              setScanError(errData.error);
+              break; // Stop scanning on auth/config errors
             }
           }
         } catch {
@@ -310,35 +322,34 @@ export default function ChannelsDashboardPage() {
   }
 
   const filteredMasterFeed = useMemo(() => {
+    const timeCutoff = new Date();
+    timeCutoff.setMonth(timeCutoff.getMonth() - timeFilter);
+
     return (newOutliers || []).filter(post => {
-      // 1. Channel Filter
+      // 1. Time Filter (month-based pill)
+      const postDate = new Date(post.postedAt || Date.now());
+      if (postDate < timeCutoff) return false;
+
+      // 2. Channel Filter
       if (feedFilters.channel !== "All" && post.fromUsername !== feedFilters.channel) return false;
-      
-      // 2. Outlier Score Filter
+
+      // 3. Outlier Score Filter
       const score = post.outlierScore ?? post.multiplier ?? 0;
       if (feedFilters.minOutlier && score < Number(feedFilters.minOutlier)) return false;
       if (feedFilters.maxOutlier && score > Number(feedFilters.maxOutlier)) return false;
-      
-      // 3. Views Filter
+
+      // 4. Views Filter
       if (feedFilters.minViews && (post.views || 0) < Number(feedFilters.minViews)) return false;
       if (feedFilters.maxViews && (post.views || 0) > Number(feedFilters.maxViews)) return false;
 
-      // 4. Engagement Filter
+      // 5. Engagement Filter
       const engagementRate = post.views > 0 ? (post.likes / post.views) * 100 : 0;
       if (feedFilters.minEngagement && engagementRate < Number(feedFilters.minEngagement)) return false;
       if (feedFilters.maxEngagement && engagementRate > Number(feedFilters.maxEngagement)) return false;
 
-      // 5. Time Filter
-      if (feedFilters.daysAgo) {
-        const postDate = new Date(post.postedAt || Date.now());
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - Number(feedFilters.daysAgo));
-        if (postDate < cutoffDate) return false;
-      }
-
       return true;
     });
-  }, [newOutliers, feedFilters]);
+  }, [newOutliers, feedFilters, timeFilter]);
 
   async function handleScanTracked() {
     // Collect all unique usernames from all named watchlists
@@ -565,7 +576,7 @@ export default function ChannelsDashboardPage() {
                 <div className="flex items-center gap-[10px]">
                   <h2 className="font-['Syne'] font-[700] text-[16px] text-[#F0F2F7]">🏆 Master Outlier Feed</h2>
                   <span className="font-['JetBrains_Mono'] text-[10px] bg-[rgba(255,59,87,0.1)] border border-[rgba(255,59,87,0.2)] text-[#FF3B57] px-[8px] py-[3px] rounded-[4px]">
-                    {newOutliers?.length || 0} outliers • Sorted by Score
+                    {filteredMasterFeed.length} outliers • Sorted by Score
                   </span>
                 </div>
                 <button
@@ -610,18 +621,29 @@ export default function ChannelsDashboardPage() {
                   <input type="number" placeholder="Max" value={feedFilters.maxViews} onChange={(e) => setFeedFilters({...feedFilters, maxViews: e.target.value})} className="w-20 bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded px-2 py-1 text-white text-center focus:outline-none focus:border-[#A78BFA]" />
                 </div>
 
-                {/* Time Range */}
+                {/* Time Range — pill selector */}
                 <div className="flex items-center gap-2 border-l border-[rgba(255,255,255,0.1)] pl-4">
-                  <span className="text-[#8892A4] uppercase tracking-wider text-[10px] font-bold">Posted In Last</span>
-                  <div className="flex items-center bg-[#111620] border border-[rgba(255,255,255,0.1)] rounded overflow-hidden focus-within:border-[#FF3B57]">
-                    <input type="number" placeholder="0" value={feedFilters.daysAgo} onChange={(e) => setFeedFilters({...feedFilters, daysAgo: e.target.value})} className="w-12 bg-transparent px-2 py-1 text-white text-center focus:outline-none" />
-                    <span className="bg-[rgba(255,255,255,0.05)] px-2 py-1 text-[#8892A4] border-l border-[rgba(255,255,255,0.1)]">Days</span>
+                  <span className="text-[#8892A4] uppercase tracking-wider text-[10px] font-bold">Timeframe</span>
+                  <div className="flex items-center gap-1 p-1 bg-white/[0.02] border border-white/[0.05] rounded-lg backdrop-blur-md">
+                    {([{ label: "1M", value: 1 }, { label: "3M", value: 3 }, { label: "6M", value: 6 }, { label: "12M", value: 12 }] as { label: string; value: 1 | 3 | 6 | 12 }[]).map((f) => (
+                      <button
+                        key={f.value}
+                        onClick={() => setTimeFilter(f.value)}
+                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
+                          timeFilter === f.value
+                            ? "bg-purple-500/20 text-white border border-purple-500/50 shadow-[0_0_10px_rgba(168,85,247,0.2)]"
+                            : "text-[#8892A4] hover:text-white hover:bg-white/[0.05] border border-transparent"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
                 {/* Clear Filters Button */}
                 <button 
-                  onClick={() => setFeedFilters({ channel: "All", minOutlier: "", maxOutlier: "", minViews: "", maxViews: "", minEngagement: "", maxEngagement: "", daysAgo: "" })}
+                  onClick={() => { setFeedFilters({ channel: "All", minOutlier: "", maxOutlier: "", minViews: "", maxViews: "", minEngagement: "", maxEngagement: "", daysAgo: "" }); setTimeFilter(12); }}
                   className="ml-auto text-[#FF3B57] hover:text-white transition-colors text-[11px] font-medium px-3 py-1 bg-[#FF3B57]/10 hover:bg-[#FF3B57]/20 rounded"
                 >
                   Clear Filters

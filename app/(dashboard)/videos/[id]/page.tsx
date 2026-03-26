@@ -346,6 +346,100 @@ export default function VideoAnalysisPage() {
     }
   }
 
+  const handleDownloadTxt = () => {
+    if (!analysisPayload) return;
+
+    const outlierValue =
+      post && post.outlierScore !== undefined && post.outlierScore !== null && post.outlierScore > 0
+        ? post.outlierScore
+        : typeof analysisPayload?.outlierScore === "number"
+        ? analysisPayload.outlierScore
+        : null;
+    const engagementValue =
+      post?.calculatedMetrics?.engagementRate ??
+      (post?.metrics as any)?.engagementRate ??
+      (post ? (post.metrics.likes + (post.metrics.comments || 0)) / Math.max(post.metrics.views, 1) : null);
+
+    let txt = `=========================================\n`;
+    txt += ` OUTLIER STUDIO: DEEP VIDEO ANALYSIS\n`;
+    txt += `=========================================\n\n`;
+
+    txt += `[ VIDEO ]\n`;
+    txt += `- Account: ${post?.username ? `@${post.username}` : "N/A"}\n`;
+    txt += `- Link: ${post?.permalink || "N/A"}\n`;
+    txt += `- Posted: ${post?.postedAt ? new Date(post.postedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "N/A"}\n`;
+    if (post?.caption) txt += `- Caption: ${post.caption.slice(0, 200)}${post.caption.length > 200 ? "…" : ""}\n`;
+    txt += `\n`;
+
+    txt += `[ METRICS ]\n`;
+    txt += `- Views: ${post ? formatNumber(post.metrics.views || 0) : "N/A"}\n`;
+    txt += `- Outlier Score: ${outlierValue !== null ? `${outlierValue.toFixed(1)}x` : "N/A"}\n`;
+    txt += `- Engagement: ${engagementValue !== null ? formatEngagement(engagementValue) : "N/A"}\n\n`;
+
+    // Deep analysis path (new schema)
+    const deep = analysisPayload.deepAnalysis as any;
+    if (deep?.hooks) {
+      txt += `[ HOOK ANALYSIS ]\n`;
+      txt += `Hook Type: ${deep.hooks.hookType || "N/A"}\n`;
+      txt += `Formula: ${deep.hooks.formula || "N/A"}\n`;
+      txt += `Spoken Hook: ${deep.hooks.spokenHook || "N/A"}\n`;
+      txt += `Visual Hook: ${deep.hooks.visualHook || "N/A"}\n`;
+      txt += `Text Hook: ${deep.hooks.textHook || "N/A"}\n\n`;
+    } else if ((analysisPayload as any).hookAnalysis) {
+      // Legacy schema fallback
+      const h = (analysisPayload as any).hookAnalysis;
+      txt += `[ HOOK ANALYSIS ]\n`;
+      txt += `Type: ${h.type || "N/A"}\n`;
+      txt += `Formula: ${h.formula || "N/A"}\n`;
+      txt += `Description: ${h.description || "N/A"}\n\n`;
+    }
+
+    if (deep?.narrative) {
+      txt += `[ NARRATIVE SUBSTANCE ]\n`;
+      txt += `Topic: ${deep.narrative.topic || "N/A"}\n`;
+      txt += `Story Structure: ${deep.narrative.storyStructure || "N/A"}\n`;
+      txt += `Core Idea (Seed): ${deep.narrative.seed || "N/A"}\n`;
+      txt += `Substance: ${deep.narrative.substance || "N/A"}\n`;
+      if (deep.narrative.uniqueAngle) txt += `Unique Angle: ${deep.narrative.uniqueAngle}\n`;
+      if (deep.narrative.commonBelief) txt += `Common Belief Challenged: ${deep.narrative.commonBelief}\n`;
+      if (Array.isArray(deep.narrative.supportingEvidence) && deep.narrative.supportingEvidence.length > 0) {
+        txt += `Supporting Evidence:\n`;
+        deep.narrative.supportingEvidence.forEach((ev: string, i: number) => {
+          txt += `  ${i + 1}. ${ev}\n`;
+        });
+      }
+      txt += `\n`;
+    }
+
+    if (deep?.architecture) {
+      txt += `[ VISUAL ARCHITECTURE ]\n`;
+      txt += `Layout: ${deep.architecture.visualLayout || "N/A"}\n`;
+      txt += `Visual Elements: ${deep.architecture.visualElements || "N/A"}\n`;
+      txt += `Key Visuals: ${deep.architecture.keyVisuals || "N/A"}\n`;
+      txt += `Audio: ${deep.architecture.audio || "N/A"}\n\n`;
+    }
+
+    if (deep?.conversion?.cta) {
+      txt += `[ CALL TO ACTION ]\n`;
+      txt += `${deep.conversion.cta}\n\n`;
+    }
+
+    if (transcript) {
+      txt += `[ FULL TRANSCRIPT ]\n`;
+      txt += `${transcript}\n\n`;
+    }
+
+    const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Outlier-Analysis-${post?.id || id || "export"}.txt`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -362,6 +456,23 @@ export default function VideoAnalysisPage() {
           <span className="font-['JetBrains_Mono'] text-[10px] text-[#5A6478] tracking-[0.1em] uppercase">
             Video Analysis
           </span>
+          <div className="ml-auto">
+            <button
+              onClick={handleDownloadTxt}
+              disabled={!analysisPayload}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white transition-all bg-white/[0.03] border border-white/[0.08] rounded-lg backdrop-blur-md hover:bg-white/[0.08] hover:border-white/[0.15] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg
+                className="w-4 h-4 text-[#A78BFA]"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+              </svg>
+              Export Text
+            </button>
+          </div>
         </div>
 
         {error && (

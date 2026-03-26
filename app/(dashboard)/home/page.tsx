@@ -475,6 +475,7 @@ function HomePageContent() {
   const [analysisMap, setAnalysisMap] = useState<Record<string, AnalyzeResponse>>({});
   const [analysisErrors, setAnalysisErrors] = useState<Record<string, string>>({});
   const [analysisLoadingId, setAnalysisLoadingId] = useState<string | null>(null);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptionError, setTranscriptionError] = useState("");
   const [actionResults, setActionResults] = useState<Record<string, ActionResultState>>({});
@@ -487,6 +488,26 @@ function HomePageContent() {
   const [batchResults] = useState<AnalyzeResponse[]>([]);
   void batchResults;
   const [winningFormula, setWinningFormula] = useState("");
+
+  const loadingMessages = [
+    "Extracting audio track...",
+    "Transcribing speech to text...",
+    "Identifying visual hooks...",
+    "Mapping narrative substance...",
+    "Finalizing outlier score...",
+  ];
+
+  // Cycle through loading messages while analysis is running
+  useEffect(() => {
+    if (!analysisLoadingId) {
+      setLoadingStep(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => (prev < loadingMessages.length - 1 ? prev + 1 : prev));
+    }, 4500);
+    return () => clearInterval(interval);
+  }, [analysisLoadingId]);
 
 
   function saveFlatSettings() {
@@ -583,7 +604,12 @@ function HomePageContent() {
     };
 
     setIsLoading(true);
+    setLoadingStep(0);
     setAnalysisErrors((prev) => ({ ...prev, [post.id]: "" }));
+
+    // Guard against silent 504s — abort after 5 minutes so the spinner never freezes
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300_000);
 
     try {
       setError("");
@@ -601,6 +627,7 @@ function HomePageContent() {
           model,
           platform: selectedPlatform,
         }),
+        signal: controller.signal,
       });
 
       if (!response.ok) {
@@ -628,14 +655,15 @@ function HomePageContent() {
 
       router.push(`/videos/${encodeURIComponent(post.id)}`);
     } catch (analysisError) {
+      const isAbort = analysisError instanceof Error && analysisError.name === "AbortError";
+      const msg = isAbort
+        ? "Analysis timed out. The server is taking too long — please try again."
+        : analysisError instanceof Error ? analysisError.message : "Failed to analyze post";
       setIsLoading(false);
-      const msg = analysisError instanceof Error ? analysisError.message : "Failed to analyze post";
       toast("error", "Analysis Error", msg);
-      setAnalysisErrors((prev) => ({
-        ...prev,
-        [post.id]: msg,
-      }));
+      setAnalysisErrors((prev) => ({ ...prev, [post.id]: msg }));
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
     }
   }
@@ -963,6 +991,7 @@ function HomePageContent() {
   const visiblePosts = useMemo(() => {
     if (!data) return [];
 
+    // Filter first across the full dataset (all 200 fetched posts)
     const filteredByFormat = data.posts.filter((post) => {
       if (formatFilter === "all") return true;
       if (formatFilter === "reels") return post.mediaType === "REEL";
@@ -971,10 +1000,12 @@ function HomePageContent() {
       return true;
     });
 
+    // Sort the entire filtered set — not a slice — so highest-view posts always surface
     return [...filteredByFormat].sort((a, b) => {
-      if (sortBy === "views") return b.metrics.views - a.metrics.views;
-      if (sortBy === "outlier") return b.outlierScore - a.outlierScore;
-      if (sortBy === "engagement") return b.engagementRate - a.engagementRate;
+      if (sortBy === "views") return (b.metrics.views || 0) - (a.metrics.views || 0);
+      if (sortBy === "outlier") return (b.outlierScore || 0) - (a.outlierScore || 0);
+      if (sortBy === "engagement") return (b.engagementRate || 0) - (a.engagementRate || 0);
+      // Default: newest first
       return Date.parse(b.postedAt) - Date.parse(a.postedAt);
     });
   }, [data, formatFilter, sortBy]);
@@ -1379,8 +1410,8 @@ function HomePageContent() {
                             >
                               {isAnalyzing ? (
                                 <>
-                                  <div className="w-[6px] h-[6px] rounded-full bg-[#3BFFC8] animate-pulse shadow-[0_0_6px_#3BFFC8]"></div>
-                                  Analyzing...
+                                  <div className="w-[6px] h-[6px] rounded-full bg-[#3BFFC8] animate-pulse shadow-[0_0_6px_#3BFFC8] shrink-0"></div>
+                                  <span className="truncate">{loadingMessages[loadingStep]}</span>
                                 </>
                               ) : hasAnalysis ? "✦ View Analysis" : "✦ Analyze Video"}
                             </button>

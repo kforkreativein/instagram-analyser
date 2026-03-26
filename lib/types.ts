@@ -50,6 +50,7 @@ export interface InstagramPost {
   zScores: ZScoreMap;
   outlierScore: number;
   isOutlier: boolean;
+  isPinned?: boolean;
   calculatedMetrics?: {
     outlierScore: number;
     engagementRate: number;

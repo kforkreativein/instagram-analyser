@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
-import { getSettings } from "../../../../lib/db";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -73,7 +72,6 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as {
       usernames?: string[];
-      apifyApiKey?: string;
     };
 
     const usernames = Array.isArray(body.usernames)
@@ -84,24 +82,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "At least one username is required." }, { status: 400 });
     }
 
-    // Fetch user's Apify key from database
-    let apifyToken = (body.apifyApiKey ?? "").trim();
+    // 1. Authenticate the user
     const session = await getServerSession(authOptions);
-    if (!apifyToken && session?.user?.id) {
-      try {
-        const dbSettings = await getSettings(session.user.id);
-        apifyToken = dbSettings.apifyApiKey;
-      } catch (error) {
-        console.error("Failed to fetch user settings:", error);
-      }
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (!apifyToken) {
+    // 2. Fetch the user's secure API key from the database
+    const userSettings = await prisma.settings.findUnique({
+      where: { userId: session.user.id },
+      select: { apifyApiKey: true },
+    });
+
+    // 3. Validate the key exists and isn't the frontend mask
+    if (!userSettings?.apifyApiKey || userSettings.apifyApiKey === "••••••••") {
       return NextResponse.json(
-        { error: "Apify API key not found. Add it in Settings." },
-        { status: 401 }
+        { error: "Apify API key is missing or invalid. Please update it in Settings." },
+        { status: 400 }
       );
     }
+
+    // 4. Use only the secure DB key
+    const apifyToken = userSettings.apifyApiKey;
 
     const url = `https://api.apify.com/v2/acts/apify~instagram-profile-scraper/run-sync-get-dataset-items?token=${apifyToken}`;
 
