@@ -3,15 +3,20 @@
 import { useEffect, useState } from "react";
 
 import {
+  CalendarDays,
   Clapperboard,
+  GalleryHorizontal,
   Home,
+  Lightbulb,
   LogOut,
+  Menu,
   MessageSquare,
   Settings,
   Tv,
   Upload,
   Users,
   Video,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -29,6 +34,9 @@ const navItems = [
   {
     section: "Create", items: [
       { label: "Scripts", path: "/scripts", icon: Clapperboard },
+      { label: "Ideas", path: "/ideas", icon: Lightbulb },
+      { label: "Carousels", path: "/carousels", icon: GalleryHorizontal },
+      { label: "Calendar", path: "/calendar", icon: CalendarDays },
       { label: "Clients", path: "/clients", icon: Users },
       { label: "Leads", path: "/leads", icon: MessageSquare },
     ]
@@ -40,50 +48,35 @@ const navItems = [
   }
 ];
 
-export default function AppSidebar() {
-  const pathname = usePathname();
-  const { data: session } = useSession();
-
-  // Dynamic branding from Settings
-  const [agencyName, setAgencyName] = useState("");
-  const [agencyLogo, setAgencyLogo] = useState("");
-
-  const fetchBranding = async () => {
-    try {
-      const res = await fetch("/api/settings");
-      if (res.ok) {
-        const data = await res.json();
-        setAgencyName(data?.agencyName || "");
-        setAgencyLogo(data?.agencyLogo || "");
-      }
-    } catch (error) {
-      console.error("Failed to fetch branding:", error);
-    }
-  };
-
-  useEffect(() => {
-    fetchBranding();
-    
-    // Listen for custom event "settingsUpdated" for real-time sync across components
-    const handleUpdate = () => fetchBranding();
-    window.addEventListener("settingsUpdated", handleUpdate);
-    return () => window.removeEventListener("settingsUpdated", handleUpdate);
-  }, []);
-
-  const displayName = agencyName || session?.user?.email || "Outlier Studio";
-  const displayLogo = agencyLogo || "/branding/full-logo.png";
-
+function SidebarContent({
+  agencyName,
+  agencyLogo,
+  displayName,
+  pathname,
+  onClose,
+}: {
+  agencyName: string;
+  agencyLogo: string;
+  displayName: string;
+  pathname: string;
+  onClose?: () => void;
+}) {
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-[240px] md:w-[260px] lg:w-[280px] shrink-0 bg-[rgba(8,10,15,0.97)] border-r border-[rgba(255,255,255,0.06)] z-[100] flex flex-col">
+    <>
       {/* LOGO AREA */}
-      <div className="px-6 h-[89px] flex items-center border-b border-white/5 shrink-0">
-        <Link href="/" className="flex items-center transition-opacity hover:opacity-90 no-underline">
+      <div className="px-6 h-[89px] flex items-center justify-between border-b border-white/5 shrink-0">
+        <Link href="/" onClick={onClose} className="flex items-center transition-opacity hover:opacity-90 no-underline">
           <img
             src="/branding/full-logo.png"
             alt="Outlier Studio"
             className="w-[160px] h-auto object-contain"
           />
         </Link>
+        {onClose && (
+          <button onClick={onClose} className="xl:hidden text-[#5A6478] hover:text-white transition-colors ml-2">
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* NAV SECTION */}
@@ -106,6 +99,7 @@ export default function AppSidebar() {
                       if (item.path === "/scripts") {
                         localStorage.removeItem("remix_data");
                       }
+                      onClose?.();
                     }}
                     className={`relative flex items-center gap-[10px] p-[9px_10px] rounded-[8px] mb-[1px] text-[13px] border transition-all duration-150 cursor-pointer no-underline ${isActive
                       ? "bg-[rgba(255,59,87,0.08)] text-[#F0F2F7] border-[rgba(255,59,87,0.18)]"
@@ -119,8 +113,6 @@ export default function AppSidebar() {
                       <Icon className="w-4 h-4" />
                     </span>
                     <span>{item.label}</span>
-
-
                   </Link>
                 );
               })}
@@ -153,6 +145,87 @@ export default function AppSidebar() {
           </button>
         </div>
       </div>
-    </aside>
+    </>
+  );
+}
+
+export default function AppSidebar() {
+  const pathname = usePathname();
+  const { data: session } = useSession();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const [agencyName, setAgencyName] = useState("");
+  const [agencyLogo, setAgencyLogo] = useState("");
+
+  const fetchBranding = async () => {
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const data = await res.json();
+        setAgencyName(data?.agencyName || "");
+        setAgencyLogo(data?.agencyLogo || "");
+      }
+    } catch (error) {
+      console.error("Failed to fetch branding:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchBranding();
+    const handleUpdate = () => fetchBranding();
+    window.addEventListener("settingsUpdated", handleUpdate);
+    return () => window.removeEventListener("settingsUpdated", handleUpdate);
+  }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  const displayName = agencyName || session?.user?.email || "Outlier Studio";
+  const displayLogo = agencyLogo || "/branding/full-logo.png";
+
+  return (
+    <>
+      {/* Desktop sidebar — only visible on xl (1280px+) */}
+      <aside className="hidden xl:flex fixed left-0 top-0 bottom-0 w-[280px] shrink-0 bg-[rgba(8,10,15,0.97)] border-r border-[rgba(255,255,255,0.06)] z-[100] flex-col">
+        <SidebarContent
+          agencyName={agencyName}
+          agencyLogo={displayLogo}
+          displayName={displayName}
+          pathname={pathname}
+        />
+      </aside>
+
+      {/* Mobile / Tablet hamburger button — visible below xl */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="xl:hidden fixed top-4 left-4 z-[200] w-[38px] h-[38px] flex items-center justify-center rounded-[8px] bg-[rgba(8,10,15,0.95)] border border-[rgba(255,255,255,0.1)] text-[#8892A4] hover:text-white hover:border-[rgba(255,255,255,0.2)] transition-all shadow-lg"
+        aria-label="Open menu"
+      >
+        <Menu className="w-4 h-4" />
+      </button>
+
+      {/* Mobile / Tablet overlay */}
+      {mobileOpen && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="xl:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[190]"
+            onClick={() => setMobileOpen(false)}
+          />
+          {/* Drawer */}
+          <aside className="xl:hidden fixed left-0 top-0 bottom-0 w-[280px] bg-[rgba(8,10,15,0.99)] border-r border-[rgba(255,255,255,0.06)] z-[200] flex flex-col animate-in slide-in-from-left duration-200">
+            <SidebarContent
+              agencyName={agencyName}
+              agencyLogo={displayLogo}
+              displayName={displayName}
+              pathname={pathname}
+              onClose={() => setMobileOpen(false)}
+            />
+          </aside>
+        </>
+      )}
+    </>
   );
 }

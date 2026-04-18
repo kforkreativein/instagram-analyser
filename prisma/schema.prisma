@@ -28,6 +28,9 @@ model User {
   history   History[]
   leads     Lead[]
   dmTemplates DmTemplate[]
+  ideas     Idea[]
+  carousels Carousel[]
+  contentItems ContentItem[]
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -72,12 +75,21 @@ model Client {
   avoidTopics       String?
   ctaStyle          String?
   customInstructions String? @db.Text
+  /// Full pasted "master guide" for script voice, remix rules, anatomy — injected when this client is selected in Script Studio
+  scriptMasterGuide  String?  @db.Text
   preferredHooks    Json?    // Array of hook objects
   examples          Json?    // Array of script examples
   trackedVideos     Json?    // Array of video data
   styleDNA          Json?    // Style analysis object
+  gameMode          String?  @default("awareness") // "awareness" | "conversion"
+  profileData       Json?    // { handle, bio, displayName, ctaLink, followers, picUrl, highlights[], lastFetchedAt }
+  pcrAudit          Json?    // { score, grade, rewrites: {...}, alignmentFlag, updatedAt }
+  strategyAudit     Json?    // { iva, platform, anchors[], patterns, gapReport, updatedAt }
   
   scripts           Script[]
+  ideas             Idea[]
+  carousels         Carousel[]
+  contentItems      ContentItem[]
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -92,17 +104,18 @@ model Script {
   clientId    String?
   client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   
-  title       String
-  content     String   @db.Text
-  type        String?  // "Remix" or "Original"
-  hooks       Json?    // A/B hooks state
-  caption     String?  @db.Text
-  repurposed  String?  @db.Text
-  scriptJob   String?
-  directorsCut Json?
-  prompts     Json?
-  packaging   Json?
-  metadata    Json?    // Editor settings + research + generated content
+  title         String
+  content       String   @db.Text
+  type          String?  // "Remix" or "Original"
+  hooks         Json?    // A/B hooks state
+  caption       String?  @db.Text
+  repurposed    String?  @db.Text
+  scriptJob     String?
+  directorsCut  Json?
+  prompts       Json?
+  packaging     Json?
+  metadata      Json?    // Editor settings + research + generated content
+  contentItemId String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -122,6 +135,7 @@ model Upload {
   analysis    Json?
   transcript  String? @db.Text
   thumbnail   String? @db.Text
+  errorMessage String? @db.Text
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -211,4 +225,70 @@ model DmTemplate {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([userId])
+}
+
+model Idea {
+  id          String   @id @default(cuid())
+  userId      String
+  clientId    String?
+  title       String
+  seed        String   @db.Text
+  substance   String?  @db.Text
+  angles      Json?
+  contentItems ContentItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([clientId])
+}
+
+model Carousel {
+  id            String   @id @default(cuid())
+  userId        String
+  clientId      String?
+  contentItemId String?
+  title         String
+  format        String
+  slides        Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client        Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  contentItem   ContentItem? @relation(fields: [contentItemId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([clientId])
+}
+
+model ContentItem {
+  id           String    @id @default(cuid())
+  userId       String
+  clientId     String?
+  type         String    @default("reel")
+  status       String    @default("not_started")
+  title        String
+  pillar       String?
+  scheduledAt  DateTime?
+  postedAt     DateTime?
+  publishedUrl String?
+  ideaId       String?
+  scriptId     String?
+  carouselId   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client       Client?    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  idea         Idea?      @relation(fields: [ideaId], references: [id], onDelete: SetNull)
+  carousels    Carousel[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([userId, scheduledAt])
+  @@index([clientId])
 }

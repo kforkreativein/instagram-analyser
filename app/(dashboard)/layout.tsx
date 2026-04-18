@@ -10,7 +10,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className="flex min-h-screen w-full relative z-10">
         <AppSidebar />
-        <div className="flex-1 ml-[240px] md:ml-[260px] lg:ml-[280px] min-w-0 overflow-x-hidden min-h-screen relative flex flex-col z-1 bg-transparent">
+        <div className="flex-1 xl:ml-[280px] min-w-0 overflow-x-hidden min-h-screen relative flex flex-col z-1 bg-transparent">
           <Topbar />
           <main className="p-[32px] flex-1 page-enter relative z-10">
             {children}

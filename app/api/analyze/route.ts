@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import prisma from "@/lib/prisma";
+import { getSettings } from "@/lib/db";
 import type { AIAnalysis, AnalyzeRequestBody, AnalyzeResponse, DeepAnalysis } from "../../../lib/types";
 import { calculateOutlierScore } from "../../../lib/utils";
 import ffmpeg from "fluent-ffmpeg";
@@ -606,6 +606,155 @@ async function generateWithProvider(
   };
 }
 
+function detectTextAnalysisProvider(model: string): "gemini" | "openai" | "claude" {
+  if (model.startsWith("claude")) return "claude";
+  if (model.startsWith("gpt")) return "openai";
+  return "gemini";
+}
+
+const HOOK_ANALYSIS_SYSTEM = `You are an expert hook analyzer for Instagram Reels, TikTok, and YouTube Shorts. Evaluate hooks using the following framework and return a structured JSON response.
+
+Scoring criteria (each 1-10):
+- pattern_interrupt: Does it stop the scroll in 0.5 seconds?
+- clarity: Does the viewer instantly know who this is for?
+- curiosity_gap: Does it create tension / an unanswered question?
+- audience_relevance: Is it targeted at specific pain points or desires?
+- specificity: Is it concrete and specific vs. vague and generic?
+- cliche_avoidance: Does it avoid "Wait until the end", "You won't believe this", etc.?
+
+Return ONLY valid JSON in this exact format:
+{
+  "type": "hook_analysis",
+  "overall_score": <number 1-10>,
+  "scores": {
+    "pattern_interrupt": <number>,
+    "clarity": <number>,
+    "curiosity_gap": <number>,
+    "audience_relevance": <number>,
+    "specificity": <number>,
+    "cliche_avoidance": <number>
+  },
+  "readiness": "<Viral-Ready|Strong|Good|Decent|Weak>",
+  "strength": "<one sentence about what works and why>",
+  "improvement": "<one specific, actionable fix with the reason>",
+  "psychological_insight": "<brief explanation of the psychological mechanism at play>",
+  "rewritten_hook": "<an improved version of the hook applying the fix>"
+}`;
+
+const SCRIPT_ANALYSIS_SYSTEM = `You are an expert script analyzer for Instagram Reels (15-60 seconds). Evaluate the full script using the 7-point weighted scoring system and return a structured JSON response.
+
+Scoring weights:
+- hook_quality: 25% (0-3 seconds, 3-layer alignment, dopamine gap, specificity)
+- rehook_placement: 20% (2-3 re-hooks every 10-15s, each opens a new curiosity loop)
+- story_structure: 15% (clear arc: setup → conflict → resolution, smooth transitions)
+- speed_to_value: 15% (payoff teased by sentence 1-2, delivered by 20s)
+- psychological_triggers: 15% (2+ of: pattern interrupt, curiosity gap, personal stakes, threat/reward, social proof)
+- technical_execution: 10% (visual=spoken=text aligned, 80% mute-viewable, no fluff)
+- cta_effectiveness: 10% (single clear ask, reason provided, natural positioning)
+
+Formula: FINAL = (hook×0.25) + (rehook×0.20) + (story×0.15) + (value×0.15) + (triggers×0.15) + (technical×0.10) + (cta×0.10)
+
+Return ONLY valid JSON in this exact format:
+{
+  "type": "script_analysis",
+  "final_score": <number 1-10>,
+  "readiness": "<Viral-Ready|Strong|Good|Decent|Weak>",
+  "scores": {
+    "hook_quality": <number>,
+    "rehook_placement": <number>,
+    "story_structure": <number>,
+    "speed_to_value": <number>,
+    "psychological_triggers": <number>,
+    "technical_execution": <number>,
+    "cta_effectiveness": <number>
+  },
+  "key_strength": "<one sentence about the strongest element>",
+  "top_3_fixes": [
+    { "pillar": "<pillar name>", "issue": "<what's wrong>", "fix": "<exact fix>" },
+    { "pillar": "<pillar name>", "issue": "<what's wrong>", "fix": "<exact fix>" },
+    { "pillar": "<pillar name>", "issue": "<what's wrong>", "fix": "<exact fix>" }
+  ],
+  "detected_triggers": ["<trigger1>", "<trigger2>"],
+  "estimated_duration": "<estimated speaking duration e.g. 35-40s>"
+}`;
+
+async function runTextHookScriptLLM(
+  prompt: string,
+  systemPrompt: string,
+  model: string,
+  apiKeys: { openai?: string; gemini?: string; anthropic?: string },
+): Promise<string> {
+  const provider = detectTextAnalysisProvider(model);
+
+  if (provider === "claude") {
+    if (!apiKeys.anthropic) throw new Error("Anthropic API key not found in Settings");
+    const anthropic = new Anthropic({ apiKey: apiKeys.anthropic });
+    const result = await anthropic.messages.create({
+      model,
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: [{ role: "user", content: prompt }],
+    });
+    return result.content.filter((c) => c.type === "text").map((c) => (c.type === "text" ? c.text : "")).join("").trim();
+  }
+  if (provider === "openai") {
+    if (!apiKeys.openai) throw new Error("OpenAI API key not found in Settings");
+    const openai = new OpenAI({ apiKey: apiKeys.openai });
+    const result = await openai.chat.completions.create({
+      model,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+    });
+    return result.choices[0]?.message?.content?.trim() ?? "";
+  }
+  if (!apiKeys.gemini) throw new Error("Gemini API key not found in Settings");
+  const genAI = new GoogleGenerativeAI(apiKeys.gemini);
+  const gemini = genAI.getGenerativeModel({
+    model,
+    systemInstruction: systemPrompt,
+    generationConfig: { responseMimeType: "application/json" },
+  });
+  const result = await gemini.generateContent(prompt);
+  return result.response.text().trim();
+}
+
+async function handleHookScriptAnalysis(
+  userId: string,
+  body: { mode: "hook" | "script"; content: string; model?: string },
+): Promise<NextResponse> {
+  const { mode, content, model = "gemini-3-flash-preview" } = body;
+  const dbSettings = await getSettings(userId);
+  const apiKeys = {
+    openai: dbSettings.openaiApiKey,
+    gemini: dbSettings.geminiApiKey,
+    anthropic: dbSettings.anthropicApiKey,
+  };
+
+  let systemPrompt: string;
+  let userPrompt: string;
+  if (mode === "hook") {
+    systemPrompt = HOOK_ANALYSIS_SYSTEM;
+    const hookText = content.split("\n").slice(0, 4).join("\n").trim();
+    userPrompt = `Analyze this hook:\n\n"${hookText}"`;
+  } else {
+    systemPrompt = SCRIPT_ANALYSIS_SYSTEM;
+    userPrompt = `Analyze this full script:\n\n${content}`;
+  }
+
+  const raw = await runTextHookScriptLLM(userPrompt, systemPrompt, model, apiKeys);
+  let parsed: Record<string, unknown>;
+  try {
+    const clean = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+    parsed = JSON.parse(clean) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Could not parse analysis response", raw }, { status: 502 });
+  }
+  return NextResponse.json({ analysis: parsed }, { status: 200 });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json().catch(() => ({}))) as AnalyzeRequestBody & {
@@ -625,20 +774,43 @@ export async function POST(request: NextRequest) {
       geminiApiKey?: string;
       url?: string;
       apifyApiKey?: string;
+      mode?: "hook" | "script";
+      content?: string;
     };
 
-    // Fetch user settings from database — all AI and Apify keys live here
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const dbUser = await prisma.user.findUnique({ where: { email: session.user.email } });
-    if (!dbUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-    const userSettings = await prisma.settings.findUnique({ where: { userId: dbUser.id } });
 
-    const userApifyKey = userSettings?.apifyApiKey ?? "";
+    if (
+      (body.mode === "hook" || body.mode === "script") &&
+      typeof body.content === "string" &&
+      body.content.trim()
+    ) {
+      try {
+        return await handleHookScriptAnalysis(session.user.id, {
+          mode: body.mode,
+          content: body.content,
+          model: body.model,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error("[analyze] hook/script:", message);
+        return NextResponse.json({ error: message || "Analysis failed" }, { status: 500 });
+      }
+    }
+
+    const settingsFlat = await getSettings(session.user.id);
+    const userSettings = {
+      geminiApiKey: settingsFlat.geminiApiKey,
+      openaiApiKey: settingsFlat.openaiApiKey,
+      anthropicApiKey: settingsFlat.anthropicApiKey,
+      apifyApiKey: settingsFlat.apifyApiKey,
+      activeProvider: settingsFlat.activeProvider ?? "Gemini",
+    };
+
+    const userApifyKey = userSettings.apifyApiKey ?? "";
 
     const post = body.post ?? {};
     const videoId = toStringSafe((post as any).id, "unknown");
@@ -734,18 +906,18 @@ export async function POST(request: NextRequest) {
 
     // Select the API key from the database based on the active provider
     let analysisApiKey = "";
-    const activeProvider = userSettings?.activeProvider ?? provider;
+    const activeProvider = userSettings.activeProvider ?? provider;
     if (activeProvider === "OpenAI") {
-      analysisApiKey = userSettings?.openaiApiKey ?? "";
+      analysisApiKey = userSettings.openaiApiKey ?? "";
     } else if (activeProvider === "Anthropic") {
-      analysisApiKey = userSettings?.anthropicApiKey ?? "";
+      analysisApiKey = userSettings.anthropicApiKey ?? "";
     } else {
       // Default to Gemini
-      analysisApiKey = userSettings?.geminiApiKey ?? "";
+      analysisApiKey = userSettings.geminiApiKey ?? "";
     }
 
     // Always use Gemini for transcription regardless of active provider
-    const transcriptionApiKey = userSettings?.geminiApiKey ?? "";
+    const transcriptionApiKey = userSettings.geminiApiKey ?? "";
 
     const outputTypeRaw = toStringSafe((body as unknown as UnknownRecord).outputType);
     const outputType: "analysis" | ActionOutputType =

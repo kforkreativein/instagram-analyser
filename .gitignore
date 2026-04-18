@@ -32,3 +32,6 @@ tsconfig.tsbuildinfo
 /lib/generated/prisma
 .vercel
 .env*.local
+
+# Research/reference material
+Social Media & Content Growth/

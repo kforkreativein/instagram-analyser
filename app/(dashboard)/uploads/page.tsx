@@ -7,7 +7,7 @@ import type { AnalyzeResponse, InstagramPost } from "@/lib/types";
 import { Upload, X, FileVideo, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
 import { useToast } from "@/app/components/UI/Toast";
 import { formatNumber, formatRelativeTime } from "@/lib/utils";
-import { ANALYSIS_CACHE_KEY } from "@/lib/client-settings";
+import { ANALYSIS_CACHE_KEY, LOCAL_SETTINGS_KEY, parseLocalSettings } from "@/lib/client-settings";
 
 type SavedVideoData = {
   savedAt: string;
@@ -43,6 +43,8 @@ export default function UploadsPage() {
   const [dbUploads, setDbUploads] = useState<DbUpload[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [activeUploadId, setActiveUploadId] = useState<string | null>(null);
+  const [pollAttempts, setPollAttempts] = useState(0);
+  const [estimatedTime, setEstimatedTime] = useState<string>("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -83,15 +85,44 @@ export default function UploadsPage() {
     return () => clearInterval(interval);
   }, [isAnalyzing]);
 
-  // Poll for job completion
+  // Poll for job completion with timeout
   useEffect(() => {
     if (!activeJobId || !activeUploadId) return;
 
+    const MAX_POLL_ATTEMPTS = 100; // 5 minutes (100 * 3s)
+    let attempts = 0;
+
     const pollInterval = setInterval(async () => {
+      attempts++;
+      setPollAttempts(attempts);
+
+      // Timeout after max attempts
+      if (attempts > MAX_POLL_ATTEMPTS) {
+        clearInterval(pollInterval);
+        setActiveJobId(null);
+        setActiveUploadId(null);
+        setIsAnalyzing(false);
+        setSelectedFile(null);
+        setPollAttempts(0);
+        toast("error", "Analysis Timeout", "Processing took too long. This may be due to Vercel's 10-second function limit on Free tier. Try a shorter video or upgrade your plan.");
+        
+        // Mark job as failed in database
+        fetch(`/api/analyze-video/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId: activeJobId }),
+        }).catch(() => {});
+        return;
+      }
+
       try {
         const res = await fetch(`/api/analyze-video/status?jobId=${activeJobId}`);
-        if (!res.ok) return;
-        const data = await res.json() as { status: string; id: string };
+        if (!res.ok) {
+          console.error(`[Polling] Status check failed: ${res.status}`);
+          return;
+        }
+        
+        const data = await res.json() as { status: string; id: string; error?: string };
 
         if (data.status === "COMPLETED") {
           clearInterval(pollInterval);
@@ -99,11 +130,15 @@ export default function UploadsPage() {
           setActiveUploadId(null);
           setIsAnalyzing(false);
           setSelectedFile(null);
+          setPollAttempts(0);
+          
           // Refresh upload list then navigate
           fetch("/api/uploads")
             .then(r => r.json())
             .then((d: { uploads?: DbUpload[] }) => { if (Array.isArray(d.uploads)) setDbUploads(d.uploads); })
             .catch(() => {});
+          
+          toast("success", "Analysis Complete", "Your video has been analyzed successfully!");
           router.push(`/videos/${data.id}`);
         } else if (data.status === "FAILED") {
           clearInterval(pollInterval);
@@ -111,15 +146,19 @@ export default function UploadsPage() {
           setActiveUploadId(null);
           setIsAnalyzing(false);
           setSelectedFile(null);
-          toast("error", "Analysis Failed", "The AI pipeline encountered an error. Check your API keys in Settings.");
+          setPollAttempts(0);
+          
+          const errorMsg = data.error || "The AI pipeline encountered an error. Check your API keys in Settings.";
+          toast("error", "Analysis Failed", errorMsg);
         }
-      } catch {
-        // Non-fatal polling error — keep trying
+      } catch (err) {
+        console.error("[Polling] Error:", err);
+        // Non-fatal polling error — keep trying unless max attempts reached
       }
     }, 3000);
 
     return () => clearInterval(pollInterval);
-  }, [activeJobId, activeUploadId]);
+  }, [activeJobId, activeUploadId, router, toast]);
 
   async function processFile(file: File, input?: HTMLInputElement) {
     if (!file || isAnalyzing) return;
@@ -130,17 +169,25 @@ export default function UploadsPage() {
       return;
     }
 
-    const allowedMimeTypes = new Set(["video/mp4", "video/quicktime", "video/mov"]);
-    if (!allowedMimeTypes.has(file.type) && !file.name.match(/\.(mp4|mov)$/i)) {
-      toast("error", "Invalid Format", "Unsupported file type. Please upload an MP4 or MOV file.");
+    const allowedMimeTypes = new Set(["video/mp4", "video/quicktime", "video/mov", "video/x-msvideo", ""]);
+    if (!allowedMimeTypes.has(file.type) && !file.name.match(/\.(mp4|mov|avi)$/i)) {
+      toast("error", "Invalid Format", "Unsupported file type. Please upload an MP4, MOV, or AVI file.");
       if (input) input.value = "";
       return;
     }
 
+    // Estimate processing time based on file size
+    const fileSizeMB = file.size / 1024 / 1024;
+    const estimatedSeconds = Math.ceil(30 + (fileSizeMB * 2)); // Base 30s + 2s per MB
+    setEstimatedTime(`~${estimatedSeconds}s`);
+
     setError("");
     setSelectedFile(file);
     setIsAnalyzing(true);
+    setPollAttempts(0);
     setProgressLabel("Uploading to cloud...");
+
+    let queuedJobId: string | null = null;
 
     try {
       // 1. Upload directly to Vercel Blob
@@ -164,25 +211,72 @@ export default function UploadsPage() {
       }
 
       const { jobId, uploadId } = await startRes.json() as { jobId: string; uploadId: string };
+      queuedJobId = jobId;
 
-      // 3. Fire the worker (long-running) — do NOT await; browser holds the connection
-      fetch("/api/analyze-video/worker", {
+      setProgressLabel("Transcribing & analyzing (1–4 min for typical shorts)…");
+
+      const ls = typeof window !== "undefined" ? parseLocalSettings(localStorage.getItem(LOCAL_SETTINGS_KEY)) : null;
+      const geminiApiKey =
+        (typeof window !== "undefined" && localStorage.getItem("geminiApiKey")?.trim()) || ls?.geminiApiKey || "";
+      const openaiApiKey =
+        (typeof window !== "undefined" && localStorage.getItem("openAiApiKey")?.trim()) || ls?.openaiApiKey || "";
+      const anthropicApiKey =
+        (typeof window !== "undefined" && localStorage.getItem("anthropicApiKey")?.trim()) || ls?.anthropicApiKey || "";
+      const activeProvider =
+        (typeof window !== "undefined" && localStorage.getItem("activeProvider")?.trim()) || "Gemini";
+
+      // 3. Run worker and wait — avoids infinite spinner when the job never flips to COMPLETED (e.g. missing keys, timeouts).
+      const workerRes = await fetch("/api/analyze-video/worker", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, videoUrl: newBlob.url, fileName: file.name }),
-      }).catch(() => {
-        // Worker will mark the job as FAILED in DB; polling will surface the error
+        body: JSON.stringify({
+          jobId,
+          videoUrl: newBlob.url,
+          fileName: file.name,
+          geminiApiKey: geminiApiKey || undefined,
+          openaiApiKey: openaiApiKey || undefined,
+          anthropicApiKey: anthropicApiKey || undefined,
+          activeProvider,
+        }),
       });
 
-      setProgressLabel("Transcribing speech...");
+      if (!workerRes.ok) {
+        const errData = (await workerRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errData.error || "Analysis failed. Check API keys and try a shorter/smaller clip.");
+      }
 
-      // 4. Start polling — the useEffect above will take over
-      setActiveJobId(jobId);
-      setActiveUploadId(uploadId);
-    } catch (uploadError) {
-      toast("error", "Upload Failed", uploadError instanceof Error ? uploadError.message : "Failed to start analysis.");
+      setActiveJobId(null);
+      setActiveUploadId(null);
       setIsAnalyzing(false);
       setSelectedFile(null);
+      setPollAttempts(0);
+
+      void fetch("/api/uploads")
+        .then((r) => r.json())
+        .then((d: { uploads?: DbUpload[] }) => {
+          if (Array.isArray(d.uploads)) setDbUploads(d.uploads);
+        })
+        .catch(() => {});
+
+      toast("success", "Analysis Complete", "Opening your breakdown…");
+      router.push(`/videos/${uploadId}`);
+    } catch (uploadError) {
+      const errorMsg = uploadError instanceof Error ? uploadError.message : "Failed to start analysis.";
+      console.error("[Upload] Error:", uploadError);
+      if (queuedJobId) {
+        void fetch("/api/analyze-video/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId: queuedJobId }),
+        }).catch(() => {});
+      }
+      setError(errorMsg);
+      toast("error", "Upload Failed", errorMsg);
+      setIsAnalyzing(false);
+      setSelectedFile(null);
+      setPollAttempts(0);
+      setActiveJobId(null);
+      setActiveUploadId(null);
     } finally {
       if (input) input.value = "";
     }
@@ -219,6 +313,29 @@ export default function UploadsPage() {
       }
     } catch {
       toast("error", "Deletion Failed", "An error occurred while deleting.");
+    }
+  };
+
+  const handleCancelAnalysis = async () => {
+    if (!activeJobId) return;
+
+    if (!confirm("Are you sure you want to cancel this analysis?")) return;
+
+    try {
+      await fetch(`/api/analyze-video/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: activeJobId }),
+      });
+
+      setActiveJobId(null);
+      setActiveUploadId(null);
+      setIsAnalyzing(false);
+      setSelectedFile(null);
+      setPollAttempts(0);
+      toast("info", "Cancelled", "Analysis has been cancelled.");
+    } catch {
+      toast("error", "Cancellation Failed", "Could not cancel the analysis.");
     }
   };
 
@@ -311,7 +428,7 @@ export default function UploadsPage() {
 
             <input
               type="file"
-              accept="video/mp4,video/quicktime"
+              accept="video/mp4,video/quicktime,video/x-msvideo"
               onChange={handleFileUpload}
               disabled={isAnalyzing}
               title="Upload file"
@@ -327,9 +444,17 @@ export default function UploadsPage() {
               </div>
               <div className="flex flex-col flex-1 min-w-0">
                 <span className="font-['DM_Sans'] text-[14px] font-[600] text-[#F0F2F7] truncate">{selectedFile?.name || "Processing video..."}</span>
-                <span className="font-['JetBrains_Mono'] text-[11px] text-[#5A6478]">{(selectedFile?.size ? (selectedFile.size / 1024 / 1024).toFixed(2) : "0")} MB</span>
+                <span className="font-['JetBrains_Mono'] text-[11px] text-[#5A6478]">
+                  {(selectedFile?.size ? (selectedFile.size / 1024 / 1024).toFixed(2) : "0")} MB
+                  {estimatedTime && ` • Est. ${estimatedTime}`}
+                  {pollAttempts > 0 && ` • Attempt ${pollAttempts}/100`}
+                </span>
               </div>
-              <button disabled className="w-[28px] h-[28px] rounded-full border border-[rgba(255,255,255,0.08)] text-[#8892A4] flex items-center justify-center bg-transparent cursor-not-allowed opacity-50">
+              <button 
+                onClick={handleCancelAnalysis}
+                className="w-[28px] h-[28px] rounded-full border border-[rgba(255,255,255,0.08)] text-[#8892A4] flex items-center justify-center bg-transparent hover:bg-red-500/20 hover:border-red-500/50 hover:text-red-400 transition-all cursor-pointer"
+                title="Cancel analysis"
+              >
                 <X size={14} />
               </button>
             </div>
@@ -341,6 +466,11 @@ export default function UploadsPage() {
               <div className="w-full h-[4px] bg-[rgba(255,255,255,0.07)] rounded-[2px] overflow-hidden relative">
                 <div className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#FF3B57] to-[#FF3B57] rounded-[2px] animate-[loading-bar_4s_ease-in-out_infinite] w-[40%]"></div>
               </div>
+              {pollAttempts > 80 && (
+                <p className="font-['JetBrains_Mono'] text-[10px] text-yellow-500 mt-2">
+                  ⚠️ Processing is taking longer than expected. This may timeout soon.
+                </p>
+              )}
             </div>
           </div>
         )}

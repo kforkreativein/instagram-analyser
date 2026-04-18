@@ -5,6 +5,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSettings } from "../../../lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { buildHoldTwistPromptBlock, normalizeRemixBucket } from "@/lib/remix-hold-twist-framework";
+import { buildClientVoiceAppendix } from "@/lib/client-voice-prompt";
 
 export const runtime = "nodejs";
 
@@ -16,7 +18,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     // 1. MATCH THE FRONTEND VARIABLES EXACTLY
-    const { tweakAttribute = "", analysis = {}, transcript = "", onePercentFocus = "", selectedModel = "gemini-3-flash-preview", clientProfile } = body;
+    const {
+      tweakAttribute: tweakFromBody,
+      attribute: attributeFromBody,
+      analysis = {},
+      transcript = "",
+      onePercentFocus = "",
+      selectedModel = "gemini-3-flash-preview",
+      clientProfile,
+      videoGoal = "Views (Broad Appeal)",
+    } = body as Record<string, unknown>;
+
+    const rawTweakAttribute = String(tweakFromBody || attributeFromBody || "Hook");
+    const twistBucket = normalizeRemixBucket(rawTweakAttribute);
+    const tweakAttribute = twistBucket;
 
     // 2. SAFELY PULL API KEY (From body OR Settings Database)
     const dbSettings = await getSettings(session.user.id);
@@ -36,37 +51,62 @@ export async function POST(request: NextRequest) {
     const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     // Safely fallback analysis object in case it is null/undefined
-    const safeAnalysis = analysis || {};
+    const safeAnalysis = (analysis || {}) as Record<string, any>;
 
-    const clientContext = clientProfile ? `\nCLIENT VOICE PROFILE:\n- Tone & Persona: ${clientProfile.tonePersona || clientProfile.tone || ""}\n- Audience: ${clientProfile.targetAudience}\n- Vocabulary: ${clientProfile.vocabularyLevel || clientProfile.vocabulary || ""}\n- Niche: ${clientProfile.niche}\nSTRICT: Mirror this client's tone and vocabulary in the remixed script.\n` : "";
+    const cp = clientProfile as Record<string, string> | undefined;
+    const clientContext = cp
+      ? `\nCLIENT VOICE PROFILE:\n- Tone & Persona: ${cp.tonePersona || cp.tone || ""}\n- Audience: ${cp.targetAudience || ""}\n- Vocabulary: ${cp.vocabularyLevel || cp.vocabulary || ""}\n- Niche: ${cp.niche || ""}\nSTRICT: Mirror this client's tone and vocabulary in the remixed script.\n`
+      : "";
 
-    const customDirectives = clientProfile?.customInstructions ? `\n=========================================================\n🔥 MASTER CLIENT OVERRIDE: STRICT PERSONA & RULES 🔥\nYou must absolutely embody the following persona and follow every single formatting rule, tone restriction, and output requirement listed below. This block supersedes all other tonal instructions:\n\n${clientProfile.customInstructions}\n=========================================================\n` : "";
+    const masterGuideAppendix = buildClientVoiceAppendix(
+      cp
+        ? {
+            scriptMasterGuide: cp.scriptMasterGuide,
+            customInstructions: cp.customInstructions,
+            tonePersona: cp.tonePersona || cp.tone,
+            niche: cp.niche,
+            targetAudience: cp.targetAudience,
+            vocabularyLevel: cp.vocabularyLevel || cp.vocabulary,
+          }
+        : null,
+    );
+
+    const customDirectives =
+      cp?.customInstructions && !cp?.scriptMasterGuide
+        ? `\n=========================================================\nCLIENT SHORT DIRECTIVES\n${cp.customInstructions}\n=========================================================\n`
+        : "";
+
+    const holdTwist = buildHoldTwistPromptBlock({
+      twistBucket: tweakAttribute,
+      videoGoal: String(videoGoal),
+    });
 
     const systemPrompt = `You are a viral content engineer. You are remixing a winning video analysis.
-${customDirectives}${clientContext}Strictly follow the 'Hold 6, Tweak 1' rule.
-You must LOCK 6 of these 7 attributes exactly as they are in the original video: Angle, Hook, Topic, Story Structure, Visual Format, Key Visuals, Audio.
-You will ONLY completely change the attribute the user selected: [${tweakAttribute}].
+${masterGuideAppendix}${customDirectives}${clientContext}
+${holdTwist}
 
-Original Analysis:
-- Angle: ${safeAnalysis.narrative?.seed || safeAnalysis.summary?.coreIdea || "N/A"}
+Original Analysis (map onto five buckets: Format, Idea, Hook, Script, Visuals):
+- Idea / angle: ${safeAnalysis.narrative?.seed || safeAnalysis.summary?.coreIdea || "N/A"}
 - Hook: ${safeAnalysis.hooks?.spokenHook || safeAnalysis.hookAnalysis?.description || "N/A"}
-- Topic: ${safeAnalysis.narrative?.topic || "N/A"}
-- Story Structure: ${safeAnalysis.narrative?.format || safeAnalysis.structureAnalysis?.type || "N/A"}
-- Visual Format: ${safeAnalysis.architecture?.visualLayout || "N/A"}
+- Topic label: ${safeAnalysis.narrative?.topic || "N/A"}
+- Script / structure: ${safeAnalysis.narrative?.format || safeAnalysis.structureAnalysis?.type || "N/A"}
+- Visual format: ${safeAnalysis.architecture?.visualLayout || "N/A"}
 - Key Visuals: ${safeAnalysis.architecture?.keyVisuals || "N/A"}
 - Audio: ${safeAnalysis.architecture?.audio || "N/A"}
 - Transcript: ${transcript || "N/A"}
 
-Selected Attribute to TWEAK: ${tweakAttribute}
+Selected bucket to TWIST (only this one): ${tweakAttribute}
+The other four buckets must stay locked to the reference unless a tiny clarity tweak is unavoidable.
 
 STRICT INSTRUCTION:
-1. Provide the remixed version where 6 attributes stay identical and the selected one is completely rewritten for maximum viral potential.
-2. The output must be a valid JSON object with these keys: "angle", "hook", "topic", "storyStructure", "visualFormat", "keyVisuals", "audio", "script" and "tweakReasoning". Important: Include the full generated "script".
-3. Do not use markdown fences. Output ONLY the JSON.
+1. Output a valid JSON object with these keys: "angle", "hook", "topic", "storyStructure", "visualFormat", "keyVisuals", "audio", "script", "tweakReasoning", "twistedBucket". twistedBucket must be "${tweakAttribute}".
+2. Fully rewrite content that belongs to the twisted bucket; keep the rest faithful to the source analysis and transcript.
+3. Include the full generated spoken "script" (no camera directions).
+4. No markdown fences. Output ONLY the JSON.
 
-THE 1% BETTER RULE: 
-The user is tweaking one specific attribute to iterate on this winning video. Their explicit iteration goal for this new version is: "[${onePercentFocus || "Make it 1% better."}]".
-You MUST ensure the new generated script heavily over-indexes on this specific focus.`;
+THE 1% BETTER RULE:
+Iteration focus: "${String(onePercentFocus || "Make it 1% better.")}"
+Ensure the new script reflects this focus while respecting Hold 4, Twist 1.`;
 
     const result = await model.generateContent(systemPrompt);
     const response = await result.response;

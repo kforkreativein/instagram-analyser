@@ -27,13 +27,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     // Fetch user's API keys from database
     const dbSettings = await getSettings(session.user.id);
     let apifyToken = bodyApifyKey || dbSettings.apifyApiKey;
-    let geminiKey = bodyGeminiKey || dbSettings.geminiApiKey;
+    let geminiKey =
+      (typeof bodyGeminiKey === "string" && bodyGeminiKey.trim()) ||
+      dbSettings.geminiApiKey ||
+      process.env.GEMINI_API_KEY ||
+      "";
 
     if (!videoUrl) {
       return NextResponse.json({ error: "Missing required field: videoUrl" }, { status: 400 });
     }
     if (!apifyToken || !geminiKey) {
-      return NextResponse.json({ error: "API Keys Missing. Please save them in the Settings tab." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Apify and Gemini keys are required (Settings, or pass apifyApiKey / geminiApiKey from Script Studio)." },
+        { status: 400 },
+      );
     }
 
     const platform = detectPlatform(videoUrl);
@@ -62,7 +69,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         cache: "no-store"
       });
 
-      const items = await apifyRes.json();
+      const rawJson = await apifyRes.json();
+      if (!apifyRes.ok) {
+        return NextResponse.json(
+          { error: `Apify error (${apifyRes.status}): ${typeof rawJson === "string" ? rawJson.slice(0, 200) : JSON.stringify(rawJson).slice(0, 300)}` },
+          { status: 502 },
+        );
+      }
+
+      if (!Array.isArray(rawJson)) {
+        return NextResponse.json(
+          { error: "Apify returned an unexpected response (not an array). Check the reel URL and Apify actor quota." },
+          { status: 400 },
+        );
+      }
+
+      const items = rawJson;
 
       if (!items || items.length === 0) {
         console.error("❌ APIFY FAILED: Returned empty array. URL might be invalid or private.");

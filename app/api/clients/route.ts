@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
         avoidTopics: body.avoidTopics || "",
         ctaStyle: body.ctaStyle || "",
         customInstructions: body.customInstructions || "",
+        scriptMasterGuide: body.scriptMasterGuide || null,
         preferredHooks: body.preferredHooks || [],
         examples: body.examples || body.winningScripts || [],
         trackedVideos: body.trackedVideos || [],

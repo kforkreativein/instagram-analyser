@@ -5,8 +5,9 @@
   "scripts": {
     "predev": "node -e \"const fs=require('fs');fs.rmSync('.next',{recursive:true,force:true});fs.rmSync('tsconfig.tsbuildinfo',{force:true});\"",
     "dev": "next dev -p 2000",
+    "prestart": "npm run build",
     "build": "prisma generate && next build",
-    "start": "next start -p 2000",
+    "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "clean": "node -e \"const fs=require('fs');fs.rmSync('.next',{recursive:true,force:true});fs.rmSync('tsconfig.tsbuildinfo',{force:true});\""

@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ["apify-client", "proxy-agent"],
+  experimental: {
+    serverComponentsExternalPackages: ["apify-client", "proxy-agent"],
+  },
   reactStrictMode: true,
   images: {
     remotePatterns: [

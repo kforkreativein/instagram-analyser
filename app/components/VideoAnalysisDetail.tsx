@@ -38,7 +38,7 @@ type DetailPost = InstagramPost & {
   followers?: number;
 };
 
-type TabKey = "actions" | "metrics" | "description" | "transcript" | "hook" | "structure";
+type TabKey = "actions" | "metrics" | "description" | "transcript" | "hook" | "structure" | "bricks";
 
 interface VideoAnalysisDetailProps {
   post: DetailPost;
@@ -201,6 +201,16 @@ export default function VideoAnalysisDetail({
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("actions");
   const [transcript, setTranscript] = useState<string | null>(null);
+
+  // ── Lego Bricks Dissector state ───────────────────────────────────────────
+  type BrickRating = "Strong" | "Weak" | "Untested";
+  type Brick = { id: string; label: string; current: string; rating: BrickRating; reason: string; remixSuggestions: string[] };
+  type RemixVariant = { holdBricks: string[]; tweakBricks: string[]; rationale: string; generatedIdea: string; suggestedHook?: string };
+  type BricksResult = { bricks: Brick[]; remixVariants: RemixVariant[] };
+  const [bricksResult, setBricksResult] = useState<BricksResult | null>(null);
+  const [isDissecting, setIsDissecting] = useState(false);
+  const [bricksError, setBricksError] = useState("");
+  const [expandedBrick, setExpandedBrick] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcriptError, setTranscriptError] = useState("");
   const [showRemixModal, setShowRemixModal] = useState(false);
@@ -254,6 +264,7 @@ export default function VideoAnalysisDetail({
       { key: "transcript", label: "Transcript" },
       { key: "hook", label: "Hook" },
       { key: "structure", label: "Structure" },
+      { key: "bricks", label: "🧱 Bricks" },
     ],
     [],
   );
@@ -356,6 +367,48 @@ export default function VideoAnalysisDetail({
     setCopiedTranscript(true);
     toast("success", "Copied to clipboard", "Transcript text has been copied.");
     setTimeout(() => setCopiedTranscript(false), 2000);
+  }
+
+  async function handleDissectBricks() {
+    setIsDissecting(true);
+    setBricksError("");
+    try {
+      const metrics = {
+        views: post.metrics.views,
+        likes: post.metrics.likes,
+        comments: post.metrics.comments,
+        shares: post.metrics.shares ?? 0,
+        followers: post.followers ?? 0,
+      };
+      const res = await fetch("/api/video/dissect-bricks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "from-analysis",
+          caption: post.caption || post.text || "",
+          transcript: transcriptText || "",
+          analysis,
+          metrics,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Dissection failed");
+      setBricksResult(data);
+    } catch (err: any) {
+      setBricksError(err.message || "Brick dissection failed. Check your API key in Settings.");
+    } finally {
+      setIsDissecting(false);
+    }
+  }
+
+  function handleSendBrickToEditor(variant: RemixVariant) {
+    const params = new URLSearchParams({
+      tweakBricks: variant.tweakBricks.join(","),
+      generatedIdea: variant.generatedIdea,
+      suggestedHook: variant.suggestedHook || "",
+      rationale: variant.rationale,
+    });
+    router.push(`/scripts/editor?${params.toString()}`);
   }
 
   async function handleCopyPrompt() {
@@ -671,6 +724,136 @@ export default function VideoAnalysisDetail({
                   </ul>
                 </div>
               </div>
+            </section>
+
+            <section id="bricks" className="rounded-2xl border border-[#2c2c2e] bg-[#1c1c1e] p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-white flex items-center gap-2">🧱 Lego Brick Dissector</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Decompose this video into 5 bricks — rate each one and generate remix variants.</p>
+                </div>
+                {!bricksResult && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDissectBricks()}
+                    disabled={isDissecting}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold hover:bg-amber-500/25 transition-colors disabled:opacity-50"
+                  >
+                    {isDissecting ? (
+                      <><span className="animate-spin inline-block">⏳</span> Dissecting…</>
+                    ) : "Dissect Bricks"}
+                  </button>
+                )}
+                {bricksResult && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDissectBricks()}
+                    disabled={isDissecting}
+                    className="text-xs text-gray-500 hover:text-gray-300 underline"
+                  >
+                    Re-dissect
+                  </button>
+                )}
+              </div>
+
+              {bricksError && <p className="text-xs text-rose-400 mb-3">{bricksError}</p>}
+
+              {isDissecting && (
+                <div className="flex items-center gap-3 py-8 justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-amber-400 border-opacity-50" />
+                  <span className="text-sm text-gray-400">Analyzing 5 bricks…</span>
+                </div>
+              )}
+
+              {bricksResult && !isDissecting && (
+                <div className="space-y-3">
+                  {/* 5 brick cards */}
+                  {bricksResult.bricks.map(brick => {
+                    const isOpen = expandedBrick === brick.id;
+                    const ratingColors = { Strong: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", Weak: "bg-red-500/20 text-red-400 border-red-500/30", Untested: "bg-gray-500/20 text-gray-400 border-gray-500/30" };
+                    const brickEmoji: Record<string, string> = { format: "🎬", idea: "💡", hook: "🎣", script: "📝", edit: "✂️" };
+                    return (
+                      <div key={brick.id} className="rounded-xl border border-[#2c2c2e] bg-[#0f0f10]">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedBrick(isOpen ? null : brick.id)}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+                        >
+                          <span className="text-lg shrink-0">{brickEmoji[brick.id] || "🧱"}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-semibold text-white">{brick.label}</span>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${ratingColors[brick.rating]}`}>{brick.rating}</span>
+                            </div>
+                            <p className="text-xs text-gray-400 truncate mt-0.5">{brick.current}</p>
+                          </div>
+                          <span className="text-xs text-gray-500 shrink-0">{isOpen ? "▲" : "▼"}</span>
+                        </button>
+                        {isOpen && (
+                          <div className="px-4 pb-4 space-y-3 border-t border-[#2c2c2e] pt-3">
+                            <p className="text-xs text-gray-300 leading-relaxed">{brick.current}</p>
+                            <p className="text-xs text-gray-400 italic">{brick.reason}</p>
+                            <div>
+                              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2">3 Remix Ideas</p>
+                              <div className="space-y-1.5">
+                                {brick.remixSuggestions.map((s, i) => (
+                                  <div key={i} className="flex items-start gap-2 text-xs text-gray-300 bg-white/[0.02] rounded-lg px-3 py-2 border border-white/5">
+                                    <span className="shrink-0 text-amber-400 font-bold">{i + 1}.</span>
+                                    <span>{s}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Remix variants */}
+                  {bricksResult.remixVariants.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2">Hold X, Tweak Y — Remix Variants</p>
+                      <div className="space-y-2">
+                        {bricksResult.remixVariants.map((v, i) => (
+                          <div key={i} className="rounded-xl border border-[#2c2c2e] bg-[#0f0f10] p-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-wrap gap-1 mb-2">
+                                  {v.tweakBricks.map(b => (
+                                    <span key={b} className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[9px] font-bold uppercase">Change {b}</span>
+                                  ))}
+                                  {v.holdBricks.map(b => (
+                                    <span key={b} className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-500 text-[9px] uppercase">Hold {b}</span>
+                                  ))}
+                                </div>
+                                <p className="text-xs font-semibold text-white mb-1">{v.generatedIdea}</p>
+                                {v.suggestedHook && (
+                                  <p className="text-xs text-cyan-300/70 italic">Hook: "{v.suggestedHook}"</p>
+                                )}
+                                <p className="text-xs text-gray-500 mt-1">{v.rationale}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleSendBrickToEditor(v)}
+                                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-400/30 text-cyan-300 text-xs font-bold hover:bg-cyan-500/25 transition-colors"
+                              >
+                                → Editor
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!bricksResult && !isDissecting && !bricksError && (
+                <div className="py-8 flex flex-col items-center gap-3 text-center">
+                  <p className="text-xs text-gray-500 max-w-xs">Click "Dissect Bricks" to decompose this video into Format, Idea, Hook, Script, and Edit — then get AI-generated remix variants.</p>
+                </div>
+              )}
             </section>
 
             <section className="rounded-2xl border border-[#2c2c2e] border-t-2 border-t-purple-500 bg-[#1c1c1e] p-5">

@@ -5,6 +5,7 @@ import OpenAI from "openai";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import prisma from "@/lib/prisma";
+import { getDbUserForSession } from "@/lib/session-user";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
 import os from "os";
@@ -14,13 +15,16 @@ import type { AIAnalysis, DeepAnalysis } from "../../../../lib/types";
 
 if (ffmpegPath) ffmpeg.setFfmpegPath(ffmpegPath);
 
+// Longer window for transcribe + analysis (platform cap still applies on Hobby).
 export const maxDuration = 300;
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TRANSCRIPTION_PROMPT =
-  "You are an expert transcriber. Watch this video and transcribe the exact spoken words. You MUST return the output strictly in standard .SRT format with sequential numbers, timestamps (00:00:00,000 --> 00:00:00,000), and the text on a third line per block. Example:\n1\n00:00:00,000 --> 00:00:03,500\nHello, welcome to this video.\n\n2\n00:00:03,500 --> 00:00:07,000\nToday we are covering an important topic.";
-const TRANSCRIPTION_MODEL = "gemini-3-flash-preview";
+  "You are an expert transcriber. The input may be a short video or an audio extract from a video. Transcribe the exact spoken words. You MUST return the output strictly in standard .SRT format with sequential numbers, timestamps (00:00:00,000 --> 00:00:00,000), and the text on a third line per block. Example:\n1\n00:00:00,000 --> 00:00:03,500\nHello, welcome to this video.\n\n2\n00:00:03,500 --> 00:00:07,000\nToday we are covering an important topic.";
+const TRANSCRIPTION_MODEL = "gemini-2.0-flash";
+/** Gemini inline payloads above this size often stall or fail — extract audio first. */
+const INLINE_TRANSCRIBE_MAX_BYTES = 10 * 1024 * 1024;
 const MAX_TRANSCRIPT_CHARS = 12000;
 
 async function extractThumbnail(videoBuffer: Buffer, mimeType: string): Promise<string | null> {
@@ -44,6 +48,65 @@ async function extractThumbnail(videoBuffer: Buffer, mimeType: string): Promise<
         .on("error", () => { try { fs.unlinkSync(tmpIn); } catch { } resolve(null); });
     } catch { resolve(null); }
   });
+}
+
+/**
+ * Large uploads exceed practical inline limits for video+vision. Extract up to 2 minutes of audio as MP3.
+ */
+async function prepareMediaForTranscription(videoBuffer: Buffer, mimeType: string): Promise<{ base64: string; mimeType: string }> {
+  if (videoBuffer.length <= INLINE_TRANSCRIBE_MAX_BYTES) {
+    return { base64: videoBuffer.toString("base64"), mimeType: mimeType || "video/mp4" };
+  }
+  if (!ffmpegPath) {
+    throw new Error(
+      "This video is too large to transcribe inline. Please upload a file under about 10MB, or trim to a shorter clip.",
+    );
+  }
+  const ext =
+    mimeType === "video/mp4" ? ".mp4" : mimeType === "video/quicktime" ? ".mov" : ".mp4";
+  const tmpIn = path.join(os.tmpdir(), `tx-in-${Date.now()}${ext}`);
+  const tmpOut = path.join(os.tmpdir(), `tx-out-${Date.now()}.mp3`);
+  fs.writeFileSync(tmpIn, videoBuffer);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      ffmpeg(tmpIn)
+        .outputOptions("-vn", "-t", "120")
+        .audioCodec("libmp3lame")
+        .audioBitrate("128k")
+        .audioFrequency(44100)
+        .format("mp3")
+        .on("end", () => resolve())
+        .on("error", (err) => reject(err))
+        .save(tmpOut);
+    });
+    const audioBuf = fs.readFileSync(tmpOut);
+    try {
+      fs.unlinkSync(tmpIn);
+    } catch {
+      /* ignore */
+    }
+    try {
+      fs.unlinkSync(tmpOut);
+    } catch {
+      /* ignore */
+    }
+    return { base64: audioBuf.toString("base64"), mimeType: "audio/mpeg" };
+  } catch (e) {
+    try {
+      fs.unlinkSync(tmpIn);
+    } catch {
+      /* ignore */
+    }
+    try {
+      fs.unlinkSync(tmpOut);
+    } catch {
+      /* ignore */
+    }
+    console.error("[Worker] prepareMediaForTranscription ffmpeg error:", e);
+    throw new Error(
+      "Could not prepare a smaller audio clip for transcription. Try a smaller or shorter video.",
+    );
+  }
 }
 
 function srtToPlainText(srt: string): string {
@@ -342,14 +405,54 @@ function extractDeepAnalysis(payload: UnknownRecord): DeepAnalysis | null {
   };
 }
 
-async function transcribeWithGemini(apiKey: string, base64Video: string, mimeType: string): Promise<string> {
-  const client = new GoogleGenerativeAI(apiKey);
-  const model = client.getGenerativeModel({ model: TRANSCRIPTION_MODEL });
-  const result = await model.generateContent([
-    { text: TRANSCRIPTION_PROMPT },
-    { inlineData: { data: base64Video, mimeType: mimeType || "video/mp4" } },
-  ]);
-  return result.response.text().trim();
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000,
+  errorContext: string = "Operation"
+): Promise<T> {
+  let lastError: Error | unknown;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      
+      if (attempt === maxRetries) {
+        console.error(`[Retry] ${errorContext} failed after ${maxRetries} attempts:`, error);
+        throw error;
+      }
+      
+      const delay = baseDelay * Math.pow(2, attempt - 1); // Exponential backoff
+      console.warn(`[Retry] ${errorContext} failed (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
+}
+
+async function transcribeWithGemini(apiKey: string, base64Payload: string, mimeType: string): Promise<string> {
+  const perAttemptTimeoutMs = 240_000;
+  return retryWithBackoff(async () => {
+    const client = new GoogleGenerativeAI(apiKey);
+    const model = client.getGenerativeModel({ model: TRANSCRIPTION_MODEL });
+    const gen = model.generateContent([
+      { text: TRANSCRIPTION_PROMPT },
+      { inlineData: { data: base64Payload, mimeType: mimeType || "video/mp4" } },
+    ]);
+    const result = await Promise.race([
+      gen,
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`Transcription exceeded ${perAttemptTimeoutMs / 1000}s`)),
+          perAttemptTimeoutMs,
+        ),
+      ),
+    ]);
+    return result.response.text().trim();
+  }, 2, 3000, "Gemini transcription");
 }
 
 async function generateWithProvider(
@@ -358,51 +461,59 @@ async function generateWithProvider(
   apiKey: string,
   prompt: string,
 ): Promise<{ text: string; model: string; source: SourceType }> {
-  if (provider === "OpenAI") {
-    const selectedModel = mapOpenAIModel(modelSelection);
-    const openai = new OpenAI({ apiKey });
-    const response = await openai.chat.completions.create({
-      model: selectedModel,
-      response_format: { type: "json_object" },
-      messages: [{ role: "user", content: prompt }],
-    });
-    return { text: response.choices[0]?.message?.content?.trim() ?? "", model: selectedModel, source: "openai" };
-  }
+  return retryWithBackoff(async () => {
+    if (provider === "OpenAI") {
+      const selectedModel = mapOpenAIModel(modelSelection);
+      const openai = new OpenAI({ apiKey });
+      const response = await openai.chat.completions.create({
+        model: selectedModel,
+        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: prompt }],
+      });
+      return { text: response.choices[0]?.message?.content?.trim() ?? "", model: selectedModel, source: "openai" };
+    }
 
-  if (provider === "Anthropic") {
-    const selectedModel = mapAnthropicModel(modelSelection);
-    const anthropic = new Anthropic({ apiKey });
-    const response = await anthropic.messages.create({
-      model: selectedModel,
-      max_tokens: 2000,
-      messages: [{ role: "user", content: `${prompt}\n\nEnsure your response is valid JSON.` }],
-    });
-    return { text: extractAnthropicText(response), model: selectedModel, source: "anthropic" };
-  }
+    if (provider === "Anthropic") {
+      const selectedModel = mapAnthropicModel(modelSelection);
+      const anthropic = new Anthropic({ apiKey });
+      const response = await anthropic.messages.create({
+        model: selectedModel,
+        max_tokens: 2000,
+        messages: [{ role: "user", content: `${prompt}\n\nEnsure your response is valid JSON.` }],
+      });
+      return { text: extractAnthropicText(response), model: selectedModel, source: "anthropic" };
+    }
 
-  const selectedModel = mapGeminiModel(modelSelection);
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const geminiModel = genAI.getGenerativeModel({ model: selectedModel, generationConfig: { responseMimeType: "application/json" } });
-  const response = await geminiModel.generateContent(prompt);
-  return { text: response.response.text().trim(), model: selectedModel, source: "gemini" };
+    const selectedModel = mapGeminiModel(modelSelection);
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const geminiModel = genAI.getGenerativeModel({ model: selectedModel, generationConfig: { responseMimeType: "application/json" } });
+    const response = await geminiModel.generateContent(prompt);
+    return { text: response.response.text().trim(), model: selectedModel, source: "gemini" };
+  }, 3, 2000, `${provider} analysis`);
 }
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  if (!session?.user?.id && !session?.user?.email) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const dbUser = await prisma.user.findUnique({ where: { email: session.user.email } });
+  const dbUser = await getDbUserForSession(session);
   if (!dbUser) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const { jobId, videoUrl, fileName } = await req.json() as {
+  const body = await req.json() as {
     jobId?: string;
     videoUrl?: string;
     fileName?: string;
+    geminiApiKey?: string;
+    openaiApiKey?: string;
+    anthropicApiKey?: string;
+    activeProvider?: string;
+    activeModel?: string;
   };
+  const { jobId, videoUrl, fileName } = body;
 
   if (!jobId || !videoUrl) {
     return NextResponse.json({ error: "jobId and videoUrl are required" }, { status: 400 });
@@ -414,58 +525,158 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
 
-  const markFailed = async (reason: string) => {
+  const markFailed = async (reason: string, errorDetails?: string) => {
+    console.error(`[Worker] Marking job ${jobId} as FAILED: ${reason}`, errorDetails || "");
     await prisma.upload.update({
       where: { jobId },
-      data: { status: "FAILED" },
-    }).catch(() => {});
+      data: { 
+        status: "FAILED",
+        errorMessage: reason,
+      },
+    }).catch((dbErr) => {
+      console.error(`[Worker] Failed to update DB status:`, dbErr);
+    });
     return NextResponse.json({ error: reason }, { status: 500 });
   };
 
   try {
+    console.log(`[Worker] Starting job ${jobId} for file: ${fileName}`);
+    
     // Fetch user settings
     const userSettings = await prisma.settings.findUnique({ where: { userId: dbUser.id } });
 
-    const activeProvider = userSettings?.activeProvider ?? "Gemini";
-    const provider = normalizeProvider(activeProvider);
+    const bodyGem = typeof body.geminiApiKey === "string" ? body.geminiApiKey.trim() : "";
+    const bodyOpen = typeof body.openaiApiKey === "string" ? body.openaiApiKey.trim() : "";
+    const bodyAnth = typeof body.anthropicApiKey === "string" ? body.anthropicApiKey.trim() : "";
+
+    const geminiKey =
+      bodyGem || userSettings?.geminiApiKey?.trim() || process.env.GEMINI_API_KEY?.trim() || "";
+    const openaiKey = bodyOpen || userSettings?.openaiApiKey?.trim() || "";
+    const anthropicKey = bodyAnth || userSettings?.anthropicApiKey?.trim() || "";
+
+    const providerHint = body.activeProvider?.trim() || userSettings?.activeProvider || "Gemini";
+    const provider = normalizeProvider(providerHint);
     const model =
+      body.activeModel?.trim() ||
       userSettings?.activeModel?.trim() ||
       (provider === "OpenAI" ? "gpt-5-mini-2025-08-07" : provider === "Anthropic" ? "claude-4.5-haiku" : "gemini-3-flash-preview");
 
-    let analysisApiKey = "";
-    if (provider === "OpenAI") analysisApiKey = userSettings?.openaiApiKey ?? "";
-    else if (provider === "Anthropic") analysisApiKey = userSettings?.anthropicApiKey ?? "";
-    else analysisApiKey = userSettings?.geminiApiKey ?? "";
+    function resolveAnalysisRun(
+      pref: Provider,
+      g: string,
+      o: string,
+      a: string,
+    ): { provider: Provider; apiKey: string } {
+      if (pref === "OpenAI" && o) return { provider: "OpenAI", apiKey: o };
+      if (pref === "Anthropic" && a) return { provider: "Anthropic", apiKey: a };
+      if (g) return { provider: "Gemini", apiKey: g };
+      if (o) return { provider: "OpenAI", apiKey: o };
+      if (a) return { provider: "Anthropic", apiKey: a };
+      return { provider: "Gemini", apiKey: "" };
+    }
 
-    const transcriptionApiKey = userSettings?.geminiApiKey ?? "";
+    const { provider: analysisProvider, apiKey: analysisApiKey } = resolveAnalysisRun(
+      provider,
+      geminiKey,
+      openaiKey,
+      anthropicKey,
+    );
 
-    if (!analysisApiKey) return markFailed(`Missing API key for ${activeProvider}. Please add it in Settings.`);
-    if (!transcriptionApiKey) return markFailed("Gemini API key is required for transcription.");
+    const transcriptionApiKey = geminiKey;
 
-    // Fetch video from Vercel Blob
-    const resp = await fetch(videoUrl);
-    if (!resp.ok) return markFailed("Failed to fetch video from storage.");
+    if (!analysisApiKey) {
+      console.error(`[Worker] Missing API keys for user ${dbUser.id}`);
+      return markFailed("No AI API key found. Add Gemini (and optionally OpenAI/Anthropic) in Settings or Script Studio keys.");
+    }
+    if (!transcriptionApiKey) {
+      console.error(`[Worker] Missing Gemini API key for transcription`);
+      return markFailed("Gemini API key is required for transcription (add in Settings or pass from the app).");
+    }
+
+    console.log(`[Worker] Fetching video from: ${videoUrl.substring(0, 50)}...`);
+    
+    // Fetch video from Vercel Blob with timeout
+    const fetchController = new AbortController();
+    const fetchTimeout = setTimeout(() => fetchController.abort(), 30000); // 30s timeout
+    
+    let resp;
+    try {
+      resp = await fetch(videoUrl, { signal: fetchController.signal });
+      clearTimeout(fetchTimeout);
+    } catch (fetchErr) {
+      clearTimeout(fetchTimeout);
+      return markFailed("Failed to fetch video from storage (timeout or network error).", String(fetchErr));
+    }
+    
+    if (!resp.ok) {
+      return markFailed(`Failed to fetch video from storage (HTTP ${resp.status}).`);
+    }
+    
     const arrayBuffer = await resp.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const mimeType = resp.headers.get("content-type") || "video/mp4";
     const resolvedFileName = fileName || uploadRecord.fileName;
+    
+    console.log(`[Worker] Video fetched: ${(buffer.length / 1024 / 1024).toFixed(2)} MB, type: ${mimeType}`);
 
-    // Transcription
-    const base64Video = buffer.toString("base64");
-    const rawTranscript = await transcribeWithGemini(transcriptionApiKey, base64Video, mimeType);
-    if (!rawTranscript) return markFailed("Transcription returned empty text.");
+    // Transcription (may shrink large files to an audio extract)
+    console.log(`[Worker] Starting transcription with Gemini (${TRANSCRIPTION_MODEL})...`);
+    let inlinePayload: { base64: string; mimeType: string };
+    try {
+      inlinePayload = await prepareMediaForTranscription(buffer, mimeType);
+    } catch (prepErr) {
+      console.error(`[Worker] Media preparation error:`, prepErr);
+      return markFailed(prepErr instanceof Error ? prepErr.message : "Could not prepare media for transcription.");
+    }
+
+    let rawTranscript;
+    try {
+      rawTranscript = await transcribeWithGemini(
+        transcriptionApiKey,
+        inlinePayload.base64,
+        inlinePayload.mimeType,
+      );
+    } catch (transErr) {
+      console.error(`[Worker] Transcription error:`, transErr);
+      return markFailed("Transcription failed. Check your Gemini API key and quota.", String(transErr));
+    }
+    
+    if (!rawTranscript) {
+      return markFailed("Transcription returned empty text.");
+    }
+    
+    console.log(`[Worker] Transcription complete: ${rawTranscript.length} chars`);
 
     const plainTranscript = srtToPlainText(rawTranscript) || rawTranscript;
     const transcriptForModel = plainTranscript.slice(0, MAX_TRANSCRIPT_CHARS);
 
     // AI Analysis
-    const result = await generateWithProvider(provider, model, analysisApiKey, buildUniversalSystemPrompt(transcriptForModel));
-    if (!result.text) return markFailed("Analysis returned empty text.");
+    console.log(`[Worker] Starting analysis with ${analysisProvider} (${model})...`);
+    
+    let result;
+    try {
+      result = await generateWithProvider(
+        analysisProvider,
+        model,
+        analysisApiKey,
+        buildUniversalSystemPrompt(transcriptForModel),
+      );
+    } catch (analysisErr) {
+      console.error(`[Worker] Analysis error:`, analysisErr);
+      return markFailed(`${provider} analysis failed. Check your API key and quota.`, String(analysisErr));
+    }
+    
+    if (!result.text) {
+      return markFailed("Analysis returned empty text.");
+    }
+    
+    console.log(`[Worker] Analysis complete: ${result.text.length} chars`);
 
     let parsed: UnknownRecord = {};
     try {
       parsed = parseJsonResponse(result.text);
-    } catch {
+    } catch (parseErr) {
+      console.error(`[Worker] JSON parse error:`, parseErr);
       // Fall through to fallback
     }
 
@@ -475,10 +686,15 @@ export async function POST(req: NextRequest) {
     analysis.breakdownBlocks.problemAndSolution = transcriptForModel;
     if (deepAnalysis) analysis.deepAnalysis = deepAnalysis;
 
-    // Thumbnail
-    const thumbnail = await extractThumbnail(buffer, mimeType).catch(() => null);
+    // Thumbnail (async, non-blocking failure)
+    console.log(`[Worker] Extracting thumbnail...`);
+    const thumbnail = await extractThumbnail(buffer, mimeType).catch((thumbErr) => {
+      console.error(`[Worker] Thumbnail extraction failed (non-fatal):`, thumbErr);
+      return null;
+    });
 
     // Update Upload record to COMPLETED
+    console.log(`[Worker] Saving results to database...`);
     await prisma.upload.update({
       where: { jobId },
       data: {
@@ -486,13 +702,16 @@ export async function POST(req: NextRequest) {
         fileName: resolvedFileName,
         analysis: analysis as any,
         transcript: transcriptForModel,
+        errorMessage: null, // Clear any previous errors
         ...(thumbnail ? { thumbnail } : {}),
       },
     });
 
+    console.log(`[Worker] Job ${jobId} completed successfully!`);
     return NextResponse.json({ ok: true, id: uploadRecord.id });
   } catch (err) {
-    console.error("[analyze-video/worker] error:", err);
-    return markFailed("Worker encountered an unexpected error.");
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("[Worker] Unexpected error:", err);
+    return markFailed("Worker encountered an unexpected error.", errorMsg);
   }
 }

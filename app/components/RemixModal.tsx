@@ -149,11 +149,11 @@ export default function RemixModal({ videoId }: { videoId: string }) {
                   <span className="font-['JetBrains_Mono'] text-[10px] text-cyan-400 uppercase tracking-widest">Engineering Mode</span>
                 </div>
                 <h2 className="font-['Syne'] font-[800] text-3xl text-white tracking-tight leading-tight">
-                  Hold 6, Tweak 1 Remix
+                  Hold 4, Tweak 1 (Lego Bricks)
                 </h2>
                 <p className="font-['DM_Sans'] text-sm text-[#8892A4] mt-3 leading-relaxed">
-                  We'll lock 6 successful attributes and completely transform one. <br/>
-                  <span className="text-cyan-400/80 font-medium">Select the element you want to scientifically re-engineer:</span>
+                  We'll lock 4 of the 5 Lego Bricks and completely transform one. <br/>
+                  <span className="text-cyan-400/80 font-medium">Select the brick you want to re-engineer:</span>
                 </p>
               </div>
 
@@ -179,7 +179,13 @@ export default function RemixModal({ videoId }: { videoId: string }) {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {["Angle", "Hook", "Topic", "Story Structure", "Visual Format", "Key Visuals", "Audio"].map((attr) => (
+                {([
+                  { id: "Format", emoji: "🎬", desc: "Canvas style (breakdown, listicle, POV…)" },
+                  { id: "Idea", emoji: "💡", desc: "Topic + seed + substance" },
+                  { id: "Hook", emoji: "🪝", desc: "Text + visual + spoken hook" },
+                  { id: "Script", emoji: "📝", desc: "Story structure + CTA + retention" },
+                  { id: "Edit", emoji: "✂️", desc: "Visual layout + pacing + captions" },
+                ] as const).map(({ id: attr, emoji, desc }) => (
                   <button
                     key={attr}
                     disabled={isRemixing}
@@ -193,15 +199,12 @@ export default function RemixModal({ videoId }: { videoId: string }) {
                   >
                     <span className="flex items-center gap-3">
                       <span className="w-8 h-8 rounded-lg bg-black/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        {attr === "Angle" && "☄️"}
-                        {attr === "Hook" && "🪝"}
-                        {attr === "Topic" && "🎯"}
-                        {attr === "Story Structure" && "🪜"}
-                        {attr === "Visual Format" && "🎞️"}
-                        {attr === "Key Visuals" && "👁️"}
-                        {attr === "Audio" && "🔊"}
+                        {emoji}
                       </span>
-                      {attr}
+                      <span>
+                        <span className="block">{attr}</span>
+                        <span className="text-[10px] font-normal text-gray-500">{desc}</span>
+                      </span>
                     </span>
                     
                     {isRemixing && remixAttribute === attr ? (
@@ -240,9 +243,9 @@ export default function RemixModal({ videoId }: { videoId: string }) {
             {/* RIGHT: Checklist Visualization */}
             <div className="w-full md:w-72 bg-black/40 rounded-2xl p-6 border border-white/5 flex flex-col justify-between">
               <div>
-                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-6">Remix Constraints</h3>
+                <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-6">Lego Bricks Status</h3>
                 <div className="space-y-4">
-                  {["Angle", "Hook", "Topic", "Story Structure", "Visual Format", "Key Visuals", "Audio"].map((item) => (
+                  {(["Format", "Idea", "Hook", "Script", "Edit"] as const).map((item) => (
                     <div key={item} className="flex items-center justify-between">
                       <span className={`text-[12px] font-medium font-['DM_Sans'] ${isRemixing && remixAttribute === item ? 'text-cyan-400 font-bold' : 'text-gray-400'}`}>
                         {item}
@@ -257,8 +260,8 @@ export default function RemixModal({ videoId }: { videoId: string }) {
               
               <div className="pt-6 border-t border-white/5 mt-6">
                 <p className="text-[9px] font-['JetBrains_Mono'] text-gray-600 leading-relaxed uppercase">
-                  Scientific Rule:<br/>
-                  Keep winning variables constant. Only evolve one at a time.
+                  Lego Brick Rule:<br/>
+                  Hold 4 bricks. Tweak 1. Repeat until you hit an outlier.
                 </p>
               </div>
             </div>

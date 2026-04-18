@@ -16,14 +16,24 @@ export async function POST(req: Request) {
     if (!scriptText) return NextResponse.json({ error: "Missing data" }, { status: 400 });
 
     const settings = await getSettings(session.user.id);
-    const apiKey = settings.geminiApiKey || process.env.GEMINI_API_KEY;
+    const apiKey =
+      (typeof body.geminiApiKey === "string" && body.geminiApiKey.trim()) ||
+      settings.geminiApiKey ||
+      process.env.GEMINI_API_KEY ||
+      "";
 
     if (!apiKey) return NextResponse.json({ error: "No API Key found" }, { status: 400 });
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
-    
-    const prompt = `Analyze this script. Reformat it using clear bracketed tags on their own lines: [HOOK], [BODY], and [CALL TO ACTION]. Add double line breaks between sections. Do not change the actual spoken words, just organize it properly. Output raw text only, no markdown blocks.\n\nScript:\n${scriptText}`;
+
+    const prompt = `Analyze this script. It may contain duplicate blocks or repeated section headers.
+
+1. Remove duplicate copies of the same paragraph or section (keep one best version).
+2. Reformat using bracketed tags ONLY on their own lines: [HOOK], [BODY], [CALL TO ACTION] (use these three; map "CTA" to [CALL TO ACTION]).
+3. Each tag must appear at most once in order: [HOOK] then [BODY] then [CALL TO ACTION].
+4. Do not change the meaning of spoken lines; light punctuation/line-break fixes are OK.
+5. Double line break between sections. Raw text only — no markdown code fences.\n\nScript:\n${scriptText}`;
     
     const result = await model.generateContent(prompt);
     return NextResponse.json({ updatedScript: result.response.text().replace(/```/g, '').trim() });

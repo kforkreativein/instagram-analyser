@@ -13,24 +13,29 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     try {
-        const { fullScript, selectedText, promptCommand, videoLength } = await request.json();
+        const { fullScript, selectedText, promptCommand, videoLength, geminiApiKey: bodyGemini } = await request.json();
 
         if (!promptCommand) {
             return NextResponse.json({ error: "Missing required promptCommand" }, { status: 400 });
         }
 
         const dbSettings = await getSettings(session.user.id);
-        const apiKey = dbSettings.geminiApiKey;
+        const apiKey =
+            (typeof bodyGemini === "string" && bodyGemini.trim()) ||
+            dbSettings.geminiApiKey ||
+            process.env.GEMINI_API_KEY ||
+            "";
 
         if (!apiKey) {
-            return NextResponse.json({ error: "Gemini API Key not found in Settings." }, { status: 400 });
+            return NextResponse.json({ error: "Gemini API Key not found. Add it in Settings or Script Studio keys." }, { status: 400 });
         }
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
-        // When no text is selected, the user is rewriting the full script — enforce word budget
-        const isFullRewrite = !selectedText;
+        // When no text is selected (or only whitespace), the user is rewriting the full script — enforce word budget
+        const isFullRewrite =
+            selectedText == null || typeof selectedText !== "string" || !selectedText.trim();
         const targetSeconds = videoLength ? Number(videoLength) : null;
         const maxWordCount = targetSeconds ? Math.floor(targetSeconds * 2.5) : null;
         const minWordCount = targetSeconds ? Math.floor(targetSeconds * 2.0) : null;

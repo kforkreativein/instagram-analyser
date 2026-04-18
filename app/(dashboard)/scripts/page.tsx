@@ -91,7 +91,7 @@ export default function ScriptsDashboardPage() {
 
             <button
               type="button"
-              onClick={() => router.push("/scripts/editor")}
+              onClick={() => router.push("/scripts/create")}
               className="ml-auto bg-pink-500/10 text-pink-400 border border-pink-500/35 p-[9px_18px] rounded-[8px] font-['DM_Sans'] text-[13px] font-[600] shadow-[0_0_16px_rgba(236,72,153,0.25)] transition-all pointer-events-auto hover:bg-pink-500 hover:text-white hover:shadow-[0_0_24px_rgba(236,72,153,0.45)] hover:-translate-y-[1px] cursor-pointer"
             >
               ✦ New Script
@@ -142,7 +142,7 @@ export default function ScriptsDashboardPage() {
                   description="You haven't created any scripts yet. Start by remixing a viral video or writing from scratch."
                   action={
                     <button
-                      onClick={() => router.push("/scripts/editor")}
+                      onClick={() => router.push("/scripts/create")}
                       className="inline-flex items-center gap-2 bg-pink-500/10 text-pink-400 border border-pink-500/35 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-pink-500 hover:text-white hover:shadow-[0_0_16px_rgba(236,72,153,0.4)] transition-all"
                     >
                       <Plus size={16} />

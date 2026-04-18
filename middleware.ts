@@ -16,6 +16,10 @@ export const config = {
     "/channels/:path*", 
     "/videos/:path*", 
     "/uploads/:path*",
-    "/clients/:path*"
+    "/clients/:path*",
+    "/ideas/:path*",
+    "/carousels/:path*",
+    "/calendar/:path*",
+    "/leads/:path*",
   ] 
 }

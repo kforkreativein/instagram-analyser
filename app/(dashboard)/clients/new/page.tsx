@@ -11,7 +11,8 @@ import {
   Mic2, 
   FileText,
   AlertCircle,
-  CheckCircle2
+  CheckCircle2,
+  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -46,6 +47,7 @@ function FormContent() {
     avoidTopics: "",
     ctaStyle: "",
     customInstructions: "",
+    scriptMasterGuide: "",
   });
 
   const [winningScripts, setWinningScripts] = useState<WinningScript[]>([]);
@@ -76,6 +78,7 @@ function FormContent() {
               avoidTopics: client.avoidTopics,
               ctaStyle: client.ctaStyle,
               customInstructions: client.customInstructions || "",
+              scriptMasterGuide: client.scriptMasterGuide || "",
             });
             setWinningScripts(client.examples || client.winningScripts || []);
           }
@@ -341,6 +344,24 @@ function FormContent() {
           </div>
         </div>
 
+        {/* Script master guide — long-form framework for Script Studio */}
+        <div className="glass-surface rounded-2xl p-6 space-y-4 border border-[rgba(59,255,200,0.1)]">
+          <div className="flex items-center gap-2 border-b border-white/5 pb-4">
+            <BookOpen className="w-5 h-5 text-[#3BFFC8]" />
+            <h2 className="font-['Syne'] font-[700] text-[16px] text-[#F0F2F7]">Script master guide (optional)</h2>
+          </div>
+          <p className="text-[12px] text-[#8892A4] leading-relaxed">
+            Paste your full per-client script framework (markdown welcome). When this profile is selected in Script Studio, remix and scratch runs append this automatically alongside the short fields above.
+          </p>
+          <textarea
+            value={formData.scriptMasterGuide}
+            onChange={(e) => setFormData({ ...formData, scriptMasterGuide: e.target.value })}
+            placeholder="Voice, taboos, CTA rules, remix defaults, example beats…"
+            rows={12}
+            className="w-full bg-[#080A0F]/50 border border-white/10 rounded-xl px-4 py-3 text-[#F0F2F7] text-[13px] focus:border-[#3BFFC8]/50 outline-none transition-all resize-y min-h-[200px] font-['DM_Sans'] leading-relaxed"
+          />
+        </div>
+
         {/* SECTION 4: WINNING SCRIPTS */}
         <div className="glass-surface rounded-2xl p-6 space-y-6">
           <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-2">
@@ -450,7 +471,7 @@ function FormContent() {
           <textarea
             value={formData.customInstructions}
             onChange={(e) => setFormData({...formData, customInstructions: e.target.value})}
-            placeholder="e.g. This GPT embodies Devi Mam AI... It speaks in gentle Hinglish... Always attach AutoDM product..."
+            placeholder="Short, high-priority overrides: persona line, banned phrases, must-include disclaimers, formatting quirks…"
             className="w-full bg-[#0A0A0A] border border-white/10 rounded-lg p-4 text-sm text-white/90 placeholder-white/20 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none min-h-[300px] resize-y transition-all"
           />
         </div>

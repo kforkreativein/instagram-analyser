@@ -8,7 +8,9 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) throw new Error("Unauthorized");
+    if (!session?.user?.id && !session?.user?.email) throw new Error("Unauthorized");
+
+    const tokenSubject = session.user.email || session.user.id;
 
     const jsonResponse = await handleUpload({
       body,
@@ -16,7 +18,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       onBeforeGenerateToken: async (pathname) => {
         return {
           allowedContentTypes: ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/mov'],
-          tokenPayload: JSON.stringify({ userEmail: session.user.email }),
+          tokenPayload: JSON.stringify({ userEmail: tokenSubject }),
         };
       },
       onUploadCompleted: async ({ blob, tokenPayload }) => {
