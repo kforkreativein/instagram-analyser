@@ -847,12 +847,12 @@ export async function POST(request: NextRequest) {
       console.log("YouTube Shorts detected, proceeding with Apify extraction.");
       if (userApifyKey) {
         try {
-          const input = {
-            "startUrls": [{ "url": incomingUrl }],
-            "max_results": 1,
-            "scrape_shorts": true
-          };
-          const apifyUrl = `https://api.apify.com/v2/acts/apify~youtube-scraper/run-sync-get-dataset-items?token=${userApifyKey}`;
+          // A single Short or video goes in startUrls; a channel (built from a username above) goes in channels.
+          const isSingleVideo = ytShortsRegex.test(incomingUrl) || incomingUrl.includes("watch?v=");
+          const input = isSingleVideo
+            ? { "startUrls": [{ "url": incomingUrl }] }
+            : { "channels": [incomingUrl.replace(/\/shorts\/?$/, "")], "maxResultsShorts": 1 };
+          const apifyUrl = `https://api.apify.com/v2/acts/johnvc~youtube-shorts-api/run-sync-get-dataset-items?token=${userApifyKey}`;
           const apifyRes = await fetch(apifyUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -879,8 +879,8 @@ export async function POST(request: NextRequest) {
               displayUrl: ytPost.thumbnailUrl || "",
               metrics: {
                 views: ytPost.viewCount || 0,
-                likes: ytPost.likeCount || 0,
-                comments: ytPost.commentCount || 0
+                likes: ytPost.likes || 0,
+                comments: ytPost.commentsCount || 0
               },
               authorAverageViews: authorAverageViews ?? undefined,
               permalink: ytPost.url || incomingUrl,

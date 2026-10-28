@@ -109,12 +109,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       };
     } else if (platform === "YouTube") {
       const input = {
-        startUrls: [{ url: videoUrl }],
-        max_results: 1,
-        scrape_shorts: true
+        startUrls: [{ url: videoUrl }]
       };
       const apifyRes = await fetch(
-        `https://api.apify.com/v2/acts/apify~youtube-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
+        `https://api.apify.com/v2/acts/johnvc~youtube-shorts-api/run-sync-get-dataset-items?token=${apifyToken}`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), cache: "no-store" }
       );
       if (!apifyRes.ok) throw new Error(`Apify API Error: ${await apifyRes.text()}`);
@@ -124,8 +122,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const post = items[0] as any;
         metrics = {
           views: post.viewCount || 0,
-          likes: post.likeCount || 0,
-          comments: post.commentCount || 0,
+          likes: post.likes || 0,
+          comments: post.commentsCount || 0,
           shares: 0,
           saves: 0
         };

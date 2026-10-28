@@ -83,12 +83,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       refreshPromises.push(
         (async () => {
           const input = {
-            startUrls: ytVideos.map((v: any) => ({ url: v.url })),
-            max_results: ytVideos.length,
-            scrape_shorts: true
+            startUrls: ytVideos.map((v: any) => ({ url: v.url }))
           };
           const apifyRes = await fetch(
-            `https://api.apify.com/v2/acts/apify~youtube-scraper/run-sync-get-dataset-items?token=${apifyToken}`,
+            `https://api.apify.com/v2/acts/johnvc~youtube-shorts-api/run-sync-get-dataset-items?token=${apifyToken}`,
             { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input), cache: "no-store" }
           );
           if (!apifyRes.ok) {
@@ -102,8 +100,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             const dbVid = trackedVideos.find((v: any) => v.url.includes(item.id) || v.url === item.url);
             if (dbVid) {
               dbVid.metrics.views = item.viewCount || dbVid.metrics.views;
-              dbVid.metrics.likes = item.likeCount || dbVid.metrics.likes;
-              dbVid.metrics.comments = item.commentCount || dbVid.metrics.comments;
+              dbVid.metrics.likes = item.likes || dbVid.metrics.likes;
+              dbVid.metrics.comments = item.commentsCount || dbVid.metrics.comments;
               dbVid.lastRefreshed = new Date().toISOString();
             }
           });
